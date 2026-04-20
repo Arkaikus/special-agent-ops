@@ -156,7 +156,7 @@ Architect special requirements:
 - Include routing/delegation rules.
 - Include summary of discovered existing agents/skills.
 
-### Phase 4.1 — `/team` Command Generation
+### Phase 4 — `/team` Command Generation
 
 Write command manifest to `.cursor/commands/team.md` or `.claude/commands/team.md`.
 
@@ -169,7 +169,7 @@ Required content:
   - case-insensitive role names + aliases (`fe`, `frontend` → `ui-engineer`)
 - examples for architect, ui, qa, devops tasks
 
-### Phase 4.2 — Team Index
+### Phase 5 — Team Index
 
 Write `.cursor/teams/<team-name>/README.md` (or `.claude/...`) including:
 - generation timestamp
@@ -179,7 +179,7 @@ Write `.cursor/teams/<team-name>/README.md` (or `.claude/...`) including:
 - reused existing assets
 - usage instructions for `/team` and `/team <role>`
 
-### Phase 5 — Output Summary
+### Phase 6 — Output Summary
 
 Display a structured completion summary:
 - Team name
@@ -191,7 +191,7 @@ Display a structured completion summary:
 
 If `--dry-run` is enabled, prefix each line with `[DRY RUN]` and write nothing.
 
-### Phase 6 — Optional Post-Generation Hooks
+### Phase 7 — Optional Post-Generation Hooks
 
 If `.cursor/hooks/` or `.claude/hooks/` exists (or host supports hooks), create stubs:
 - `on_file_save` → route `src/` file changes to relevant specialist
