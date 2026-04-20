@@ -65,7 +65,12 @@ What would you like to do?
 
 Then:
 - Option 1: collect freeform description, infer stack, continue with synthetic profile.
-- Option 2: present template menu, apply selected template.
+- Option 2: present this template menu, then apply the selected starter profile:
+  - web app
+  - API
+  - CLI
+  - data pipeline
+  - monorepo
 - Option 3: rerun Phase 1 against user-provided path.
 - Option 4: abort cleanly.
 
@@ -151,7 +156,7 @@ Architect special requirements:
 - Include routing/delegation rules.
 - Include summary of discovered existing agents/skills.
 
-### Phase 4 — `/team` Command Generation
+### Phase 4.1 — `/team` Command Generation
 
 Write command manifest to `.cursor/commands/team.md` or `.claude/commands/team.md`.
 
