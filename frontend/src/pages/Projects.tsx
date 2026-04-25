@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type Project } from "../api/client";
 
@@ -9,10 +9,14 @@ export function Projects() {
   const [err, setErr] = useState<string | null>(null);
 
   const load = () =>
-    api<Project[]>("/api/projects").then(setItems).catch((e) => setErr(String(e)));
+    api<Project[]>("/api/projects")
+      .then(setItems)
+      .catch((e) => setErr(String(e)));
 
   useEffect(() => {
-    load();
+    api<Project[]>("/api/projects")
+      .then(setItems)
+      .catch((e) => setErr(String(e)));
   }, []);
 
   async function onCreate(e: FormEvent) {
@@ -33,29 +37,44 @@ export function Projects() {
   }
 
   return (
-    <div className="page">
-      <h1>Projects</h1>
-      {err && <p className="error">{err}</p>}
-      <form onSubmit={onCreate} className="row">
+    <div>
+      <h1 className="mb-4 text-2xl">Projects</h1>
+      {err && <p className="text-red-400">{err}</p>}
+      <form className="mb-4 flex flex-wrap gap-2" onSubmit={onCreate}>
         <input
+          className="min-w-[180px] flex-1 rounded-md border border-[#2a3441] bg-[#1a2332] px-2.5 py-2 text-inherit"
           placeholder="Project name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
         />
         <input
+          className="min-w-[180px] flex-1 rounded-md border border-[#2a3441] bg-[#1a2332] px-2.5 py-2 text-inherit"
           placeholder="Default agent service name (optional)"
           value={agent}
           onChange={(e) => setAgent(e.target.value)}
         />
-        <button type="submit">Create</button>
+        <button
+          className="cursor-pointer rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+          type="submit"
+        >
+          Create
+        </button>
       </form>
-      <ul className="list">
+      <ul className="list-none p-0">
         {items.map((p) => (
-          <li key={p.id}>
-            <Link to={`/board/${p.id}`}>{p.name}</Link>
+          <li className="border-b border-[#2a3441] py-2" key={p.id}>
+            <Link
+              className="text-sky-300 no-underline hover:underline"
+              to={`/board/${p.id}`}
+            >
+              {p.name}
+            </Link>
             {p.default_agent && (
-              <span className="muted"> — agent: {p.default_agent}</span>
+              <span className="text-sm text-[#8899a6]">
+                {" "}
+                — agent: {p.default_agent}
+              </span>
             )}
           </li>
         ))}

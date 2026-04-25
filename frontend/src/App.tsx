@@ -1,15 +1,16 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { BoardPage } from "./pages/Board";
 import { Projects } from "./pages/Projects";
-import "./App.css";
 
 function App() {
   return (
     <BrowserRouter>
-      <div className="app">
-        <header className="header">
-          <span className="logo">agentctl</span>
-          <span className="tag">gateway</span>
+      <div className="mx-auto max-w-5xl min-h-screen bg-[#0f1419] px-6 py-4 pb-12 font-sans text-[#e8eaed]">
+        <header className="mb-6 flex items-baseline gap-3 border-b border-[#2a3441] pb-3">
+          <span className="text-xl font-bold tracking-tight">agentctl</span>
+          <span className="text-xs font-medium uppercase text-sky-300">
+            gateway
+          </span>
         </header>
         <main>
           <Routes>

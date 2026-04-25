@@ -1,11 +1,11 @@
 import {
   DndContext,
+  type DragEndEvent,
   PointerSensor,
   useSensor,
   useSensors,
-  type DragEndEvent,
 } from "@dnd-kit/core";
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Board } from "../api/client";
 import { Column } from "../components/Column";
@@ -18,16 +18,23 @@ export function BoardPage() {
   const [invokeOut, setInvokeOut] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
 
   const load = () =>
-    api<Board>(`/api/projects/${pid}/board`).then(setBoard).catch((e) => setErr(String(e)));
+    api<Board>(`/api/projects/${pid}/board`)
+      .then(setBoard)
+      .catch((e) => setErr(String(e)));
 
   useEffect(() => {
-    if (Number.isFinite(pid)) load();
+    if (!Number.isFinite(pid)) return;
+    api<Board>(`/api/projects/${pid}/board`)
+      .then(setBoard)
+      .catch((e) => setErr(String(e)));
   }, [pid]);
 
-  async function onInvoke(e: React.FormEvent) {
+  async function onInvoke(e: FormEvent) {
     e.preventDefault();
     setErr(null);
     setInvokeOut(null);
@@ -62,25 +69,37 @@ export function BoardPage() {
   if (!board) return <p>Loading…</p>;
 
   return (
-    <div className="page">
-      <nav className="nav">
-        <Link to="/">← Projects</Link>
+    <div>
+      <nav className="mb-2">
+        <Link className="text-sky-300" to="/">
+          ← Projects
+        </Link>
       </nav>
-      <h1>Kanban</h1>
-      {err && <p className="error">{err}</p>}
-      <form onSubmit={onInvoke} className="row invoke">
+      <h1 className="mb-4 text-2xl">Kanban</h1>
+      {err && <p className="text-red-400">{err}</p>}
+      <form onSubmit={onInvoke} className="mb-2 mt-2 flex flex-wrap gap-2">
         <input
+          className="min-w-[180px] flex-1 rounded-md border border-[#2a3441] bg-[#1a2332] px-2.5 py-2 text-inherit"
           placeholder="Message to default agent…"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
-        <button type="submit">Invoke</button>
+        <button
+          className="cursor-pointer rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+          type="submit"
+        >
+          Invoke
+        </button>
       </form>
-      {invokeOut && <pre className="out">{invokeOut}</pre>}
-      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="kanban">
+      {invokeOut && (
+        <pre className="mb-4 overflow-auto rounded-md border border-[#2a3441] bg-[#1a2332] p-3 text-sm">
+          {invokeOut}
+        </pre>
+      )}
+      <DndContext onDragEnd={onDragEnd} sensors={sensors}>
+        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
           {board.columns.map((c) => (
-            <Column key={c.id} column={c} />
+            <Column column={c} key={c.id} />
           ))}
         </div>
       </DndContext>
