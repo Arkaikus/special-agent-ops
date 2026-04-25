@@ -6,6 +6,9 @@ COPY python/ /app/
 RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
 
 ENV PORT={{ port }}
+{% if has_workspace %}
+ENV WORKSPACE_ROOT={{ workspace_root }}
+{% endif %}
 EXPOSE {{ port }}
 
 CMD ["uv", "run", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "{{ port }}"]

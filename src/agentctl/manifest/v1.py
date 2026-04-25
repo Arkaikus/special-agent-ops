@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 API_VERSION_V1 = "agentctl/v1"
 
+FsToolName = Literal["ls", "grep", "edit", "glob", "bash"]
+
 
 class Metadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -49,7 +51,7 @@ ModelConfig = Annotated[
 
 
 class McpServer(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: str
     transport: Literal["stdio", "sse", "http"] = "stdio"
@@ -57,6 +59,8 @@ class McpServer(BaseModel):
     args: list[str] = Field(default_factory=list)
     url: str | None = None
     env_from: list[str] = Field(default_factory=list, alias="envFrom")
+    headers: dict[str, str] | None = None
+    bearer_from_env: str | None = Field(None, alias="bearerFromEnv")
 
     @model_validator(mode="after")
     def transport_requires_fields(self) -> McpServer:
@@ -82,13 +86,51 @@ class SkillRef(BaseModel):
         return self
 
 
+class VolumeMount(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    target: str = Field(..., min_length=1)
+    name: str | None = Field(None, description="Docker named volume (shared if same name across agents)")
+    host_path: str | None = Field(None, alias="hostPath")
+    read_only: bool = Field(False, alias="readOnly")
+
+    @model_validator(mode="after")
+    def one_source(self) -> VolumeMount:
+        n = sum(x is not None for x in (self.name, self.host_path))
+        if n != 1:
+            raise ValueError("volume must set exactly one of name or hostPath")
+        return self
+
+
+class WorkspacesConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    volumes: list[VolumeMount] = Field(default_factory=list)
+
+
+class FsToolsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    enabled: bool = False
+    allow: list[FsToolName] = Field(default_factory=list)
+    root: str | None = Field(
+        None,
+        description="Workspace root inside container; defaults to first volume target or /workspace",
+    )
+
+
 class DeployConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     image: str | None = None
     compose_service: str | None = Field(None, alias="composeService")
     port: int = Field(default=8080, ge=1, le=65535)
     build_context: str | None = Field(None, alias="buildContext")
+    extra_hosts: list[str] = Field(
+        default_factory=list,
+        alias="extraHosts",
+        description='e.g. host.docker.internal:host-gateway for Linux',
+    )
 
 
 class AgentSpec(BaseModel):
@@ -100,6 +142,15 @@ class AgentSpec(BaseModel):
     skills: list[SkillRef] = Field(default_factory=list)
     prompts: dict[str, str] = Field(default_factory=dict)
     deploy: DeployConfig = Field(default_factory=DeployConfig)
+    workspaces: WorkspacesConfig = Field(default_factory=WorkspacesConfig)
+    fs_tools: FsToolsConfig | None = Field(None, alias="fsTools")
+
+    @model_validator(mode="after")
+    def fs_tools_require_volumes(self) -> AgentSpec:
+        if self.fs_tools and self.fs_tools.enabled:
+            if not self.workspaces.volumes:
+                raise ValueError("fsTools.enabled requires spec.workspaces.volumes with at least one mount")
+        return self
 
 
 class AgentManifest(BaseModel):
@@ -117,3 +168,24 @@ class AgentManifest(BaseModel):
 
     def model_dump_yaml_safe(self) -> dict[str, Any]:
         return self.model_dump(mode="json", by_alias=True)
+
+
+def effective_fs_allow(fs: FsToolsConfig | None) -> list[FsToolName] | None:
+    """Resolved allow list when fs tools are enabled; None if disabled."""
+    if not fs or not fs.enabled:
+        return None
+    if fs.allow:
+        return list(fs.allow)
+    return ["ls", "grep", "edit", "glob"]
+
+
+def workspace_root_for_spec(spec: AgentSpec) -> str | None:
+    """Primary workspace path for env + tools, or None if not applicable."""
+    ft = spec.fs_tools
+    if ft and ft.root:
+        return ft.root
+    if spec.workspaces.volumes:
+        return spec.workspaces.volumes[0].target
+    if ft and ft.enabled:
+        return "/workspace"
+    return None

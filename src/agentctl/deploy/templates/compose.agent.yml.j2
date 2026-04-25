@@ -7,9 +7,30 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       PORT: "{{ port }}"
+{% if has_workspace %}
+      WORKSPACE_ROOT: "{{ workspace_root }}"
+{% endif %}
     ports:
       - "{{ port }}:{{ port }}"
     networks:
       - agentctl-net
     depends_on:
       - redis
+{% if service_volumes %}
+    volumes:
+{% for line in service_volumes %}
+      - {{ line }}
+{% endfor %}
+{% endif %}
+{% if extra_hosts %}
+    extra_hosts:
+{% for h in extra_hosts %}
+      - "{{ h }}"
+{% endfor %}
+{% endif %}
+{% if named_volumes %}
+volumes:
+{% for n in named_volumes %}
+  {{ n }}:
+{% endfor %}
+{% endif %}

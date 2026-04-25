@@ -57,3 +57,43 @@ spec:
     run_apply(p, dry_run=False, force=True)
     t = (repo_root / ".agents" / "codex" / "python" / "server.py").read_text(encoding="utf-8")
     assert "OpenAIChatModel" in t
+
+
+def test_apply_includes_fs_tools_and_mcp_headers(repo_root: Path) -> None:
+    import os
+
+    os.chdir(repo_root)
+    p = repo_root / "examples" / "agents" / "fs-test.yaml"
+    p.write_text(
+        """
+apiVersion: agentctl/v1
+metadata:
+  name: fs-test
+spec:
+  runtime: pydantic-ai
+  model:
+    type: ollama
+    model_id: m
+    base_url: http://localhost:11434/v1
+  mcpServers:
+    - name: gitea
+      transport: http
+      url: http://gitea-mcp:8080/mcp
+      bearerFromEnv: GITEA_ACCESS_TOKEN
+  workspaces:
+    volumes:
+      - name: vol1
+        target: /workspace
+  fsTools:
+    enabled: true
+    allow: [ls, glob]
+  deploy:
+    port: 9000
+""",
+        encoding="utf-8",
+    )
+    run_apply(p, dry_run=False, force=True)
+    server = (repo_root / ".agents" / "fs-test" / "python" / "server.py").read_text(encoding="utf-8")
+    assert "workspace_tools" in server
+    assert "_mcp_http_headers" in server
+    assert (repo_root / ".agents" / "fs-test" / "python" / "workspace_tools.py").is_file()

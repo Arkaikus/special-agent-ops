@@ -1,0 +1,23 @@
+# Requires docker-compose: gitea + gitea-mcp, and GITEA_ACCESS_TOKEN in the environment.
+# Agents reach the HTTP MCP on the internal network. Create a token in the Gitea UI.
+apiVersion: agentctl/v1
+metadata:
+  name: gitea-agent
+spec:
+  runtime: pydantic-ai
+  model:
+    type: ollama
+    model_id: llama3.2
+    base_url: http://host.docker.internal:11434/v1
+  mcpServers:
+    - name: gitea
+      transport: http
+      # Must match the gitea-mcp service; default HTTP path in gitea-mcp
+      url: http://gitea-mcp:8080/mcp
+      bearerFromEnv: GITEA_ACCESS_TOKEN
+  prompts:
+    system: You can use Gitea tools (repos, issues, PRs) via MCP when the token is set.
+  deploy:
+    port: 8092
+    extraHosts:
+      - "host.docker.internal:host-gateway"

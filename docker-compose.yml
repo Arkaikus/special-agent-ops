@@ -1,3 +1,7 @@
+# Gitea: open http://localhost:3000 once, finish the install wizard, then create a
+# personal access token and set GITEA_ACCESS_TOKEN in .env (see .env.example).
+# Frontend: http://localhost:5173 — Vite must listen on 0.0.0.0 in Docker; gateway CORS
+# includes localhost:5173. Set VITE_GATEWAY_URL in .env if the API is not on localhost:8000.
 services:
   redis:
     image: redis:7-alpine
@@ -5,6 +9,43 @@ services:
       - "6379:6379"
     networks:
       - agentctl-net
+
+  gitea:
+    image: docker.gitea.com/gitea:1.22.6
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__ROOT_URL: "http://localhost:3000/"
+    volumes:
+      - gitea-data:/data
+    ports:
+      - "3000:3000"
+    networks:
+      - agentctl-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+  gitea-mcp:
+    image: docker.gitea.com/gitea-mcp-server:latest
+    profiles:
+      - mcp
+    environment:
+      GITEA_HOST: http://gitea:3000
+      GITEA_ACCESS_TOKEN: ${GITEA_ACCESS_TOKEN}
+    # HTTP transport for remote MCP; agents use http://gitea-mcp:8080/mcp
+    command: ["-t", "http", "-p", "8080", "--host", "0.0.0.0"]
+    ports:
+      - "8088:8080"
+    networks:
+      - agentctl-net
+    depends_on:
+      gitea:
+        condition: service_healthy
 
   gateway:
     build:
@@ -25,9 +66,28 @@ services:
     depends_on:
       - redis
 
+  frontend:
+    image: oven/bun:1.2
+    working_dir: /app
+    command: ["sh", "-c", "bun install && bunx vite --host 0.0.0.0 --port 5173"]
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    environment:
+      # Set VITE_GATEWAY_URL in a project-root .env for compose interpolation; do not use
+      # env_file on this service (avoids passing unrelated secrets into the Vite process).
+      VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:8000}
+    networks:
+      - agentctl-net
+    depends_on:
+      - gateway
+
 networks:
   agentctl-net:
     driver: bridge
 
 volumes:
+  gitea-data: {}
   gateway-data: {}
+  agentctl-shared-ws: {}

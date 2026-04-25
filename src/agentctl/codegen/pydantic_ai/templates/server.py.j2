@@ -19,10 +19,23 @@ from pydantic_ai.providers.openai import OpenAIProvider
 {% if has_mcp %}
 from pydantic_ai.mcp import MCPServerHTTP, MCPServerStdio, MCPServerSSE
 {% endif %}
+{% if has_fs %}
+import workspace_tools
+{% endif %}
 
 PORT = int(os.environ.get("PORT", "{{ port }}"))
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 MCP_SERVERS = {{ mcp_servers_literal }}
+_FS_ALLOW = {{ fs_allow_literal }}
+
+
+def _mcp_http_headers(entry: dict) -> dict | None:
+    h = dict(entry.get("headers") or {})
+    b = entry.get("bearerFromEnv")
+    if b:
+        t = os.environ.get(b, "")
+        h["Authorization"] = f"Bearer {t}"
+    return h or None
 
 
 def _build_toolsets():
@@ -41,10 +54,27 @@ def _build_toolsets():
                 )
             )
         elif transport == "sse" and entry.get("url"):
-            toolsets.append(MCPServerSSE(entry["url"], tool_prefix=name))
+            hdrs = _mcp_http_headers(entry)
+            toolsets.append(MCPServerSSE(entry["url"], tool_prefix=name, headers=hdrs))
         elif transport == "http" and entry.get("url"):
-            toolsets.append(MCPServerHTTP(entry["url"], tool_prefix=name))
+            hdrs = _mcp_http_headers(entry)
+            toolsets.append(MCPServerHTTP(entry["url"], tool_prefix=name, headers=hdrs))
     return toolsets
+{% else %}
+    return []
+{% endif %}
+
+
+def _build_fs_tools():
+{% if has_fs %}
+    reg = {
+        "ls": workspace_tools.tool_ls,
+        "grep": workspace_tools.tool_grep,
+        "edit": workspace_tools.tool_edit,
+        "glob": workspace_tools.tool_glob,
+        "bash": workspace_tools.tool_bash,
+    }
+    return [reg[k] for k in _FS_ALLOW if k in reg]
 {% else %}
     return []
 {% endif %}
@@ -72,9 +102,13 @@ def build_agent() -> Agent[None, str]:
     )
 {% endif %}
     toolsets = _build_toolsets()
+    tools = _build_fs_tools()
+    kw: dict = {"model": model, "system_prompt": system_prompt}
     if toolsets:
-        return Agent(model, system_prompt=system_prompt, toolsets=toolsets)
-    return Agent(model, system_prompt=system_prompt)
+        kw["toolsets"] = toolsets
+    if tools:
+        kw["tools"] = tools
+    return Agent(**kw)
 
 
 _agent: Agent[None, str] | None = None

@@ -1,0 +1,25 @@
+# LM Studio: start a local server (e.g. OpenAI-compatible) and set the model name to match
+# a loaded model. From the host, base_url is often http://127.0.0.1:1234/v1
+#
+# From an agent **container** on Linux, you typically need a routable host. Options:
+# - extraHosts below (host.docker.internal)
+# - Or run the agent on the host (no Docker) and use 127.0.0.1
+apiVersion: agentctl/v1
+metadata:
+  name: lmstudio
+spec:
+  runtime: pydantic-ai
+  model:
+    type: openai_compatible
+    model_id: gpt-oss-20b
+    # LM Studio "API base" usually ends in /v1
+    base_url: http://host.docker.internal:1234/v1
+    api_key_env: ""
+  prompts:
+    system: You are a local LM Studio–backed assistant. Answer clearly and briefly.
+  deploy:
+    port: 8095
+    composeService: lmstudio
+    # Linux Docker: map host gateway so host.docker.internal resolves
+    extraHosts:
+      - "host.docker.internal:host-gateway"

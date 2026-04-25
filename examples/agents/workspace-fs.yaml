@@ -1,0 +1,24 @@
+# Example: shared named volume + opt-in fs tools (bash omitted by default when allow is empty)
+apiVersion: agentctl/v1
+metadata:
+  name: workspace-demo
+spec:
+  runtime: pydantic-ai
+  model:
+    type: ollama
+    model_id: llama3.2
+    base_url: http://host.docker.internal:11434/v1
+  workspaces:
+    volumes:
+      - name: agentctl-shared-ws
+        target: /workspace
+  fsTools:
+    enabled: true
+    # default allow is ls, grep, edit, glob (no bash). Uncomment to add bash:
+    # allow: [ls, grep, edit, glob, bash]
+  prompts:
+    system: You can list, search, and edit files under /workspace only.
+  deploy:
+    port: 8093
+    extraHosts:
+      - "host.docker.internal:host-gateway"

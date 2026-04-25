@@ -58,6 +58,20 @@
         },
         "deploy": {
           "$ref": "#/$defs/DeployConfig"
+        },
+        "workspaces": {
+          "$ref": "#/$defs/WorkspacesConfig"
+        },
+        "fsTools": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FsToolsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -111,9 +125,56 @@
           ],
           "default": null,
           "title": "Buildcontext"
+        },
+        "extraHosts": {
+          "description": "e.g. host.docker.internal:host-gateway for Linux",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extrahosts",
+          "type": "array"
         }
       },
       "title": "DeployConfig",
+      "type": "object"
+    },
+    "FsToolsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "allow": {
+          "items": {
+            "enum": [
+              "ls",
+              "grep",
+              "edit",
+              "glob",
+              "bash"
+            ],
+            "type": "string"
+          },
+          "title": "Allow",
+          "type": "array"
+        },
+        "root": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace root inside container; defaults to first volume target or /workspace",
+          "title": "Root"
+        }
+      },
+      "title": "FsToolsConfig",
       "type": "object"
     },
     "McpServer": {
@@ -170,6 +231,33 @@
           },
           "title": "Envfrom",
           "type": "array"
+        },
+        "headers": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Headers"
+        },
+        "bearerFromEnv": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bearerfromenv"
         }
       },
       "required": [
@@ -355,6 +443,65 @@
         }
       },
       "title": "SkillRef",
+      "type": "object"
+    },
+    "VolumeMount": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "minLength": 1,
+          "title": "Target",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Docker named volume (shared if same name across agents)",
+          "title": "Name"
+        },
+        "hostPath": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hostpath"
+        },
+        "readOnly": {
+          "default": false,
+          "title": "Readonly",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "title": "VolumeMount",
+      "type": "object"
+    },
+    "WorkspacesConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "volumes": {
+          "items": {
+            "$ref": "#/$defs/VolumeMount"
+          },
+          "title": "Volumes",
+          "type": "array"
+        }
+      },
+      "title": "WorkspacesConfig",
       "type": "object"
     }
   },
