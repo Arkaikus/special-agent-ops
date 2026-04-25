@@ -1,0 +1,19 @@
+# Example: stdio MCP server (command must exist in container image or use SSE/HTTP URLs).
+apiVersion: agentctl/v1
+metadata:
+  name: mcp-helper
+spec:
+  runtime: pydantic-ai
+  model:
+    type: ollama
+    model_id: llama3.2
+    base_url: http://host.docker.internal:11434/v1
+  mcpServers:
+    - name: demo
+      transport: stdio
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-everything"]
+  prompts:
+    system: You can use MCP tools from the demo server when available.
+  deploy:
+    port: 8082

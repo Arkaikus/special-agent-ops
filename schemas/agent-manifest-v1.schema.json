@@ -1,0 +1,381 @@
+{
+  "$defs": {
+    "AgentSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "runtime": {
+          "default": "pydantic-ai",
+          "enum": [
+            "pydantic-ai",
+            "mcp-agent",
+            "swarm-rs"
+          ],
+          "title": "Runtime",
+          "type": "string"
+        },
+        "model": {
+          "discriminator": {
+            "mapping": {
+              "anthropic": "#/$defs/ModelAnthropic",
+              "ollama": "#/$defs/ModelOllama",
+              "openai_compatible": "#/$defs/ModelOpenAICompatible"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ModelAnthropic"
+            },
+            {
+              "$ref": "#/$defs/ModelOllama"
+            },
+            {
+              "$ref": "#/$defs/ModelOpenAICompatible"
+            }
+          ],
+          "title": "Model"
+        },
+        "mcpServers": {
+          "items": {
+            "$ref": "#/$defs/McpServer"
+          },
+          "title": "Mcpservers",
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/SkillRef"
+          },
+          "title": "Skills",
+          "type": "array"
+        },
+        "prompts": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Prompts",
+          "type": "object"
+        },
+        "deploy": {
+          "$ref": "#/$defs/DeployConfig"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "title": "AgentSpec",
+      "type": "object"
+    },
+    "DeployConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "composeService": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Composeservice"
+        },
+        "port": {
+          "default": 8080,
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "Port",
+          "type": "integer"
+        },
+        "buildContext": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Buildcontext"
+        }
+      },
+      "title": "DeployConfig",
+      "type": "object"
+    },
+    "McpServer": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "transport": {
+          "default": "stdio",
+          "enum": [
+            "stdio",
+            "sse",
+            "http"
+          ],
+          "title": "Transport",
+          "type": "string"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command"
+        },
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "envFrom": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Envfrom",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "McpServer",
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Metadata",
+      "type": "object"
+    },
+    "ModelAnthropic": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "anthropic",
+          "default": "anthropic",
+          "title": "Type",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "api_key_env": {
+          "default": "ANTHROPIC_API_KEY",
+          "title": "Api Key Env",
+          "type": "string"
+        },
+        "temperature": {
+          "default": 0.0,
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Temperature",
+          "type": "number"
+        }
+      },
+      "required": [
+        "model_id"
+      ],
+      "title": "ModelAnthropic",
+      "type": "object"
+    },
+    "ModelOllama": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ollama",
+          "default": "ollama",
+          "title": "Type",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "base_url": {
+          "default": "http://host.docker.internal:11434/v1",
+          "title": "Base Url",
+          "type": "string"
+        },
+        "api_key_env": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Api Key Env"
+        },
+        "temperature": {
+          "default": 0.0,
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Temperature",
+          "type": "number"
+        }
+      },
+      "required": [
+        "model_id"
+      ],
+      "title": "ModelOllama",
+      "type": "object"
+    },
+    "ModelOpenAICompatible": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "openai_compatible",
+          "default": "openai_compatible",
+          "title": "Type",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "base_url": {
+          "title": "Base Url",
+          "type": "string"
+        },
+        "api_key_env": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "OPENAI_API_KEY",
+          "title": "Api Key Env"
+        },
+        "temperature": {
+          "default": 0.0,
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Temperature",
+          "type": "number"
+        }
+      },
+      "required": [
+        "model_id",
+        "base_url"
+      ],
+      "title": "ModelOpenAICompatible",
+      "type": "object"
+    },
+    "SkillRef": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "git": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git"
+        },
+        "inlinePrompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inlineprompt"
+        }
+      },
+      "title": "SkillRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/AgentSpec"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "metadata",
+    "spec"
+  ],
+  "title": "AgentManifest",
+  "type": "object"
+}

@@ -1,0 +1,14 @@
+apiVersion: agentctl/v1
+metadata:
+  name: researcher
+spec:
+  runtime: pydantic-ai
+  model:
+    type: anthropic
+    model_id: claude-sonnet-4-20250514
+  prompts:
+    system: You research topics thoroughly and cite assumptions.
+  mcpServers: []
+  deploy:
+    port: 8081
+    composeService: researcher

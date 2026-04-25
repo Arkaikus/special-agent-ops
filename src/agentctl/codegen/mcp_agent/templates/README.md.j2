@@ -1,0 +1,9 @@
+# MCP-agent runtime: {{ agent_name }}
+
+This target extends the pydantic-ai generated agent with `redis_hook.py` for inter-agent messaging.
+
+Parity milestones:
+
+1. Scaffold — FastAPI `/health`, `/invoke`, MCP toolsets from manifest (done by shared codegen).
+2. Durable tasks — Redis Streams consumer in `redis_hook.py` (extend as needed).
+3. Multi-agent routing — use `agent_gateway` invoke API with explicit agent id.

@@ -1,0 +1,44 @@
+use axum::{routing::get, Json, Router};
+use serde::Deserialize;
+use serde_json::json;
+use std::net::SocketAddr;
+use std::path::Path;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+#[derive(Debug, Deserialize)]
+struct Config {
+    agent_name: String,
+    port: u16,
+}
+
+fn load_config() -> Config {
+    let p = Path::new("config.toml");
+    if p.exists() {
+        let raw = std::fs::read_to_string(p).expect("read config.toml");
+        return toml::from_str(&raw).expect("parse config");
+    }
+    Config {
+        agent_name: "{{ agent_name }}".to_string(),
+        port: {{ port }},
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let cfg = load_config();
+    let app = Router::new().route("/health", get(health));
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], cfg.port));
+    tracing::info!("{} listening on {}", cfg.agent_name, addr);
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+
+async fn health() -> Json<serde_json::Value> {
+    Json(json!({ "status": "ok", "runtime": "swarm-rs" }))
+}

@@ -1,0 +1,108 @@
+"""Generated agent runtime (pydantic-ai). Do not edit by hand — regenerate with agentctl apply."""
+from __future__ import annotations
+
+import os
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
+from pydantic_ai import Agent
+{% if model.provider == "anthropic" %}
+from pydantic_ai.models.anthropic import AnthropicModel
+{% elif model.provider == "ollama" %}
+from pydantic_ai.models.ollama import OllamaModel
+from pydantic_ai.providers.ollama import OllamaProvider
+{% else %}
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
+{% endif %}
+{% if has_mcp %}
+from pydantic_ai.mcp import MCPServerHTTP, MCPServerStdio, MCPServerSSE
+{% endif %}
+
+PORT = int(os.environ.get("PORT", "{{ port }}"))
+REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+MCP_SERVERS = {{ mcp_servers_literal }}
+
+
+def _build_toolsets():
+{% if has_mcp %}
+    toolsets = []
+    for entry in MCP_SERVERS:
+        name = entry.get("name") or "mcp"
+        transport = entry.get("transport") or "stdio"
+        if transport == "stdio" and entry.get("command"):
+            toolsets.append(
+                MCPServerStdio(
+                    entry["command"],
+                    entry.get("args") or [],
+                    tool_prefix=name,
+                    env=os.environ.copy(),
+                )
+            )
+        elif transport == "sse" and entry.get("url"):
+            toolsets.append(MCPServerSSE(entry["url"], tool_prefix=name))
+        elif transport == "http" and entry.get("url"):
+            toolsets.append(MCPServerHTTP(entry["url"], tool_prefix=name))
+    return toolsets
+{% else %}
+    return []
+{% endif %}
+
+
+def build_agent() -> Agent[None, str]:
+    system_prompt = """{{ system_prompt | e }}"""
+{% if model.provider == "anthropic" %}
+    _ = os.environ.get("{{ model.api_key_env }}")
+    model = AnthropicModel("{{ model.model_id }}")
+{% elif model.provider == "ollama" %}
+    model = OllamaModel(
+        "{{ model.model_id }}",
+        provider=OllamaProvider(base_url="{{ model.base_url }}"),
+    )
+{% else %}
+    _key = (
+        os.environ.get("{{ model.api_key_env }}", "sk-local")
+        if "{{ model.api_key_env }}"
+        else "sk-local"
+    )
+    model = OpenAIChatModel(
+        "{{ model.model_id }}",
+        provider=OpenAIProvider(base_url="{{ model.base_url }}", api_key=_key),
+    )
+{% endif %}
+    toolsets = _build_toolsets()
+    if toolsets:
+        return Agent(model, system_prompt=system_prompt, toolsets=toolsets)
+    return Agent(model, system_prompt=system_prompt)
+
+
+_agent: Agent[None, str] | None = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _agent
+    _agent = build_agent()
+    yield
+    _agent = None
+
+
+app = FastAPI(title="{{ agent_name }}", lifespan=lifespan)
+
+
+class InvokeBody(BaseModel):
+    message: str = Field(..., min_length=1)
+    context: dict | None = None
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "agent": "{{ agent_name }}"}
+
+
+@app.post("/invoke")
+async def invoke(body: InvokeBody):
+    assert _agent is not None
+    result = await _agent.run(body.message)
+    return {"output": result.output}

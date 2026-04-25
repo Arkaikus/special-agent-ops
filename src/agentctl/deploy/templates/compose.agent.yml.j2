@@ -1,0 +1,15 @@
+services:
+  {{ service_name }}:
+    build:
+      context: ./.agents/{{ agent_name }}
+      dockerfile: Dockerfile
+    image: {{ image }}
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      PORT: "{{ port }}"
+    ports:
+      - "{{ port }}:{{ port }}"
+    networks:
+      - agentctl-net
+    depends_on:
+      - redis

@@ -1,0 +1,14 @@
+apiVersion: agentctl/v1
+metadata:
+  name: demo
+spec:
+  runtime: pydantic-ai
+  model:
+    type: ollama
+    model_id: llama3.2
+    base_url: http://host.docker.internal:11434/v1
+  prompts:
+    system: You are a concise demo agent for agentctl.
+  deploy:
+    port: 8080
+    composeService: demo
