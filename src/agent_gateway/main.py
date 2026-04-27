@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from agent_gateway.api.routes_agents import router as agents_router
 from agent_gateway.api.routes_board import router as board_router
 from agent_gateway.api.routes_health import router as health_router
 from agent_gateway.api.routes_invoke import router as invoke_router
@@ -41,6 +42,7 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(projects_router)
+app.include_router(agents_router)
 app.include_router(board_router)
 app.include_router(invoke_router)
 

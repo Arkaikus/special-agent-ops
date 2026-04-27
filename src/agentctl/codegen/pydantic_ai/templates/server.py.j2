@@ -1,9 +1,12 @@
 """Generated agent runtime (pydantic-ai). Do not edit by hand — regenerate with agentctl apply."""
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
@@ -25,8 +28,33 @@ import workspace_tools
 
 PORT = int(os.environ.get("PORT", "{{ port }}"))
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+GATEWAY_URL = os.environ.get("GATEWAY_URL", "").strip()
+AGENT_NAME = os.environ.get("AGENT_NAME", "{{ agent_name }}").strip()
+AGENT_HOST = os.environ.get("AGENT_HOST", "{{ agent_name }}").strip()
+GATEWAY_HEARTBEAT_SEC = int(os.environ.get("GATEWAY_HEARTBEAT_SEC", "45"))
 MCP_SERVERS = {{ mcp_servers_literal }}
 _FS_ALLOW = {{ fs_allow_literal }}
+
+_log = logging.getLogger("agent.runtime")
+
+
+async def _register_with_gateway() -> None:
+    if not GATEWAY_URL:
+        return
+    base = GATEWAY_URL.rstrip("/")
+    payload: dict = {"name": AGENT_NAME, "host": AGENT_HOST, "port": PORT}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(f"{base}/api/agents/register", json=payload)
+            r.raise_for_status()
+    except Exception as e:
+        _log.warning("Gateway register failed: %s", e)
+
+
+async def _gateway_heartbeat_loop() -> None:
+    while True:
+        await asyncio.sleep(GATEWAY_HEARTBEAT_SEC)
+        await _register_with_gateway()
 
 
 def _mcp_http_headers(entry: dict) -> dict | None:
@@ -112,14 +140,27 @@ def build_agent() -> Agent[None, str]:
 
 
 _agent: Agent[None, str] | None = None
+_heartbeat_task: asyncio.Task[None] | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _agent
+    global _agent, _heartbeat_task
     _agent = build_agent()
-    yield
-    _agent = None
+    await _register_with_gateway()
+    if GATEWAY_URL and GATEWAY_HEARTBEAT_SEC > 0:
+        _heartbeat_task = asyncio.create_task(_gateway_heartbeat_loop())
+    try:
+        yield
+    finally:
+        if _heartbeat_task is not None:
+            _heartbeat_task.cancel()
+            try:
+                await _heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            _heartbeat_task = None
+        _agent = None
 
 
 app = FastAPI(title="{{ agent_name }}", lifespan=lifespan)
@@ -138,5 +179,10 @@ async def health():
 @app.post("/invoke")
 async def invoke(body: InvokeBody):
     assert _agent is not None
-    result = await _agent.run(body.message)
+    text = body.message
+    if body.context:
+        import json
+
+        text = f"{body.message}\n\n(Gateway context: {json.dumps(body.context, sort_keys=True)})"
+    result = await _agent.run(text)
     return {"output": result.output}

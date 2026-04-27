@@ -27,6 +27,8 @@ def test_apply_generates_server(repo_root: Path) -> None:
     assert "FastAPI" in text
     assert "OllamaModel" in text
     assert "/invoke" in text
+    assert "GATEWAY_URL" in text
+    assert "/api/agents/register" in text
 
 
 def test_openai_compatible_in_manifest(repo_root: Path) -> None:

@@ -7,6 +7,10 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       PORT: "{{ port }}"
+      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8000}
+      AGENT_HOST: {{ service_name }}
+      AGENT_NAME: {{ agent_name }}
+      GATEWAY_HEARTBEAT_SEC: ${GATEWAY_HEARTBEAT_SEC:-45}
 {% if has_workspace %}
       WORKSPACE_ROOT: "{{ workspace_root }}"
 {% endif %}

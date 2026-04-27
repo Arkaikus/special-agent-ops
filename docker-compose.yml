@@ -65,6 +65,8 @@ services:
       - agentctl-net
     depends_on:
       - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     image: oven/bun:1.2

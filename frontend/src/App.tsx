@@ -1,5 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AgentsPage } from "./pages/Agents";
 import { BoardPage } from "./pages/Board";
+import { AgentChatPage } from "./pages/Chat";
 import { Projects } from "./pages/Projects";
 
 function App() {
@@ -16,6 +18,11 @@ function App() {
           <Routes>
             <Route path="/" element={<Projects />} />
             <Route path="/board/:projectId" element={<BoardPage />} />
+            <Route path="/agents/:projectId" element={<AgentsPage />} />
+            <Route
+              path="/chat/:projectId/:agentId"
+              element={<AgentChatPage />}
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

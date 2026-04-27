@@ -12,7 +12,14 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     const t = await r.text();
     throw new Error(`${r.status} ${t}`);
   }
-  return r.json() as Promise<T>;
+  if (r.status === 204) {
+    return undefined as T;
+  }
+  const text = await r.text();
+  if (!text) {
+    return undefined as T;
+  }
+  return JSON.parse(text) as T;
 }
 
 export type Project = {
@@ -23,6 +30,16 @@ export type Project = {
   default_agent_port: number;
 };
 
+export type RegisteredAgent = {
+  id: number;
+  name: string;
+  host: string;
+  port: number;
+  project_ids: number[];
+  last_seen_at: string;
+  available: boolean;
+};
+
 export type Card = {
   id: number;
   column_id: number;
@@ -30,6 +47,8 @@ export type Card = {
   body: string;
   position: number;
   agent_name: string | null;
+  priority: number;
+  team_label: string;
 };
 
 export type Column = {
@@ -43,3 +62,34 @@ export type Board = {
   project_id: number;
   columns: Column[];
 };
+
+/** Global registry; optional `forProjectId` limits to agents with no project links or linked to that project. */
+export function listAgents(forProjectId?: number): Promise<RegisteredAgent[]> {
+  const q =
+    forProjectId !== undefined
+      ? `?for_project_id=${encodeURIComponent(String(forProjectId))}`
+      : "";
+  return api<RegisteredAgent[]>(`/api/agents${q}`);
+}
+
+export function getAgent(agentId: number): Promise<RegisteredAgent> {
+  return api<RegisteredAgent>(`/api/agents/${agentId}`);
+}
+
+export function addAgentToProject(
+  agentId: number,
+  projectId: number,
+): Promise<RegisteredAgent> {
+  return api<RegisteredAgent>(`/api/agents/${agentId}/projects/${projectId}`, {
+    method: "POST",
+  });
+}
+
+export function removeAgentFromProject(
+  agentId: number,
+  projectId: number,
+): Promise<RegisteredAgent> {
+  return api<RegisteredAgent>(`/api/agents/${agentId}/projects/${projectId}`, {
+    method: "DELETE",
+  });
+}

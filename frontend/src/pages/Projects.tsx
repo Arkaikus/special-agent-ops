@@ -63,17 +63,25 @@ export function Projects() {
       </form>
       <ul className="list-none p-0">
         {items.map((p) => (
-          <li className="border-b border-[#2a3441] py-2" key={p.id}>
+          <li
+            className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-[#2a3441] py-2"
+            key={p.id}
+          >
             <Link
               className="text-sky-300 no-underline hover:underline"
               to={`/board/${p.id}`}
             >
               {p.name}
             </Link>
+            <Link
+              className="text-xs font-medium text-[#8899a6] no-underline hover:text-sky-300"
+              to={`/agents/${p.id}`}
+            >
+              Agents
+            </Link>
             {p.default_agent && (
               <span className="text-sm text-[#8899a6]">
-                {" "}
-                — agent: {p.default_agent}
+                default: {p.default_agent}
               </span>
             )}
           </li>

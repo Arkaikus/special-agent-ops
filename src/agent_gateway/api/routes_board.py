@@ -3,11 +3,31 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, col, select
 
-from agent_gateway.api.schemas import BoardRead, CardCreate, CardMove, CardRead, ColumnCreate, ColumnRead
+from agent_gateway.api.schemas import BoardRead, CardCreate, CardRead, CardUpdate, ColumnCreate, ColumnRead
 from agent_gateway.db import get_session
 from agent_gateway.models.orm import BoardColumn, Card, Project
 
 router = APIRouter(prefix="/api", tags=["board"])
+
+
+def _card_read(card: Card) -> CardRead:
+    return CardRead(
+        id=card.id,  # type: ignore[arg-type]
+        column_id=card.column_id,
+        title=card.title,
+        body=card.body,
+        position=card.position,
+        agent_name=card.agent_name,
+        priority=card.priority,
+        team_label=card.team_label,
+    )
+
+
+def _card_project_id(session: Session, card: Card) -> int:
+    col = session.get(BoardColumn, card.column_id)
+    if not col:
+        raise HTTPException(status_code=400, detail="card column missing")
+    return col.project_id
 
 
 @router.get("/projects/{project_id}/board", response_model=BoardRead)
@@ -33,17 +53,7 @@ def get_board(project_id: int, session: Session = Depends(get_session)) -> Board
                 id=c.id,  # type: ignore[arg-type]
                 title=c.title,
                 position=c.position,
-                cards=[
-                    CardRead(
-                        id=card.id,  # type: ignore[arg-type]
-                        column_id=card.column_id,
-                        title=card.title,
-                        body=card.body,
-                        position=card.position,
-                        agent_name=card.agent_name,
-                    )
-                    for card in cards
-                ],
+                cards=[_card_read(card) for card in cards],
             )
         )
     return BoardRead(project_id=project_id, columns=out_cols)
@@ -75,38 +85,55 @@ def add_card(
         body=body.body,
         position=body.position,
         agent_name=body.agent_name,
+        priority=body.priority,
+        team_label=body.team_label,
     )
     session.add(card)
     session.commit()
     session.refresh(card)
-    return CardRead(
-        id=card.id,  # type: ignore[arg-type]
-        column_id=card.column_id,
-        title=card.title,
-        body=card.body,
-        position=card.position,
-        agent_name=card.agent_name,
-    )
+    return _card_read(card)
 
 
 @router.patch("/cards/{card_id}", response_model=CardRead)
-def move_card(card_id: int, body: CardMove, session: Session = Depends(get_session)) -> CardRead:
+def update_card(card_id: int, body: CardUpdate, session: Session = Depends(get_session)) -> CardRead:
     card = session.get(Card, card_id)
     if not card:
         raise HTTPException(status_code=404, detail="card not found")
-    col = session.get(BoardColumn, body.column_id)
-    if not col:
-        raise HTTPException(status_code=400, detail="invalid column")
-    card.column_id = body.column_id
-    card.position = body.position
+    data = body.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=400, detail="no fields to update")
+
+    project_id = _card_project_id(session, card)
+
+    if "column_id" in data:
+        new_col = session.get(BoardColumn, data["column_id"])
+        if not new_col or new_col.project_id != project_id:
+            raise HTTPException(status_code=400, detail="invalid column for project")
+        card.column_id = data["column_id"]
+    if "title" in data:
+        card.title = data["title"]
+    if "body" in data:
+        card.body = data["body"]
+    if "position" in data:
+        card.position = data["position"]
+    if "agent_name" in data:
+        card.agent_name = data["agent_name"]
+    if "priority" in data:
+        card.priority = data["priority"]
+    if "team_label" in data:
+        card.team_label = data["team_label"]
+
     session.add(card)
     session.commit()
     session.refresh(card)
-    return CardRead(
-        id=card.id,  # type: ignore[arg-type]
-        column_id=card.column_id,
-        title=card.title,
-        body=card.body,
-        position=card.position,
-        agent_name=card.agent_name,
-    )
+    return _card_read(card)
+
+
+@router.delete("/cards/{card_id}")
+def delete_card(card_id: int, session: Session = Depends(get_session)) -> dict[str, str]:
+    card = session.get(Card, card_id)
+    if not card:
+        raise HTTPException(status_code=404, detail="card not found")
+    session.delete(card)
+    session.commit()
+    return {"status": "ok"}
