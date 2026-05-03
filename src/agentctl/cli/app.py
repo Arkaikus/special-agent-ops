@@ -9,6 +9,8 @@ from agentctl import __version__
 from agentctl.cli.apply import run_apply
 from agentctl.cli.deploy import run_deploy
 from agentctl.cli.doctor import run_doctor
+from agentctl.cli.undeploy import run_undeploy
+from agentctl.cli.list_agents import run_list
 
 app = typer.Typer(
     name="agentctl",
@@ -55,6 +57,29 @@ def deploy(
 ) -> None:
     """Build Docker image for an agent and run it via docker compose."""
     run_deploy(agent_name, apply_first=apply_first, manifest=manifest, no_compose=no_compose)
+
+
+@app.command("undeploy")
+def undeploy(
+    agent_name: str = typer.Argument(..., help="Agent name (directory under .agents/)."),
+    volumes: bool = typer.Option(False, "--volumes", "-v", help="Also remove named volumes."),
+    images: bool = typer.Option(False, "--images", "-i", help="Also remove locally built images."),
+) -> None:
+    """Bring down a deployed agent service (docker compose down)."""
+    run_undeploy(agent_name, remove_volumes=volumes, remove_images=images)
+
+
+@app.command("list")
+def list_agents(
+    agents_dir: Path | None = typer.Option(
+        None,
+        "--dir",
+        "-d",
+        help="Override the .agents/ directory to inspect.",
+    ),
+) -> None:
+    """List all agents scaffolded under .agents/ with their runtime and compose config."""
+    run_list(agents_dir)
 
 
 @app.command("doctor")

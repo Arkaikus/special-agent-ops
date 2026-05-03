@@ -87,6 +87,15 @@ class AgentRead(BaseModel):
     available: bool
 
 
+class AgentProbeResult(BaseModel):
+    agent_id: int
+    name: str
+    url: str
+    reachable: bool
+    status_code: int
+    detail: str | None = None
+
+
 class InvokeRequest(BaseModel):
     message: str = Field(min_length=1)
     project_id: int | None = None

@@ -2,6 +2,10 @@
 # personal access token and set GITEA_ACCESS_TOKEN in .env (see .env.example).
 # Frontend: http://localhost:5173 — Vite must listen on 0.0.0.0 in Docker; gateway CORS
 # includes localhost:5173. Set VITE_GATEWAY_URL in .env if the API is not on localhost:8000.
+#
+# Network: agentctl-net is declared as an attachable named bridge so that agent
+# projects scaffolded by `agentctl apply` (under .agents/) can join it by
+# referencing it as an external network in their compose.agent.yml.
 services:
   redis:
     image: redis:7-alpine
@@ -85,11 +89,38 @@ services:
     depends_on:
       - gateway
 
+  # Ollama — local LLM inference server.
+  # Enable with: docker compose --profile ollama up
+  # GPU (NVIDIA): uncomment the 'deploy' block below and ensure the nvidia-container-toolkit is installed.
+  # Pull a model after first start: docker compose exec ollama ollama pull llama3.2
+  ollama:
+    image: ollama/ollama:latest
+    profiles:
+      - ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - agentctl-net
+    # Uncomment to enable NVIDIA GPU access:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
 networks:
   agentctl-net:
     driver: bridge
+    attachable: true
+    driver_opts:
+      com.docker.network.bridge.name: agentctl-net
 
 volumes:
   gitea-data: {}
   gateway-data: {}
   agentctl-shared-ws: {}
+  ollama-data: {}

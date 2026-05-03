@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import asyncio
+import ipaddress
 import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 
 from agent_gateway.api.schemas import InvokeRequest, InvokeResponse
 from agent_gateway.db import get_session
 from agent_gateway.models.orm import Project, RegisteredAgent
-from agent_gateway.services.agent_runner import run_agent_http
+from agent_gateway.services.agent_runner import run_agent_http, stream_agent_http
 from agent_gateway.services.bus import get_bus
 
 logger = logging.getLogger(__name__)
@@ -17,7 +20,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["invoke"])
 
 # Allow only safe hostnames / IPv4 addresses for ad-hoc host routing.
-# Blocks bare IPs of internal ranges, metadata endpoints, etc.
 _SAFE_HOST_RE = re.compile(
     r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?"
     r"(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$"
@@ -33,9 +35,18 @@ _BLOCKED_HOSTS = frozenset({
 })
 
 
+def _is_private_ip(host: str) -> bool:
+    """Return True if *host* parses as an IP address in a non-routable range."""
+    try:
+        addr = ipaddress.ip_address(host)
+        return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved
+    except ValueError:
+        return False
+
+
 def _validate_ad_hoc_host(host: str) -> None:
     """Raise 400 if the host string is not a safe Docker-network hostname."""
-    if host in _BLOCKED_HOSTS:
+    if host in _BLOCKED_HOSTS or _is_private_ip(host):
         raise HTTPException(status_code=400, detail=f"Blocked host: {host!r}")
     if not _SAFE_HOST_RE.match(host):
         raise HTTPException(
@@ -61,17 +72,12 @@ def _resolve_registered(
     return None
 
 
-@router.post("/invoke", response_model=InvokeResponse)
-async def invoke(
+def _build_invoke_context(
+    session: Session,
     body: InvokeRequest,
-    session: Session = Depends(get_session),
-) -> InvokeResponse:
-    reg = _resolve_registered(
-        session,
-        registered_agent_id=body.registered_agent_id,
-        agent_lookup=body.agent_lookup,
-    )
-
+    reg: RegisteredAgent | None,
+) -> tuple[str, int, dict | None]:
+    """Resolve (agent_host, port, context) from the request."""
     agent_host: str | None = None
     port = body.agent_port or 8080
 
@@ -105,9 +111,10 @@ async def invoke(
     if body.project_id is not None:
         invoke_context = {"project_id": body.project_id}
 
-    url = f"http://{agent_host}:{port}/invoke"
-    out = await run_agent_http(url, body.message, context=invoke_context)
+    return agent_host, port, invoke_context
 
+
+async def _publish_bus(body: InvokeRequest, agent_host: str) -> None:
     bus = get_bus()
     if bus and body.project_id is not None:
         try:
@@ -117,8 +124,72 @@ async def invoke(
                 {"agent": agent_host, "message": body.message},
             )
         except Exception as exc:  # noqa: BLE001
-            # Bus publish is best-effort; log but do not fail the invocation response.
             logger.warning("Redis bus publish failed (project=%s): %s", body.project_id, exc)
 
+
+@router.post("/invoke", response_model=InvokeResponse)
+async def invoke(
+    body: InvokeRequest,
+    session: Session = Depends(get_session),
+) -> InvokeResponse:
+    reg = _resolve_registered(
+        session,
+        registered_agent_id=body.registered_agent_id,
+        agent_lookup=body.agent_lookup,
+    )
+    agent_host, port, invoke_context = _build_invoke_context(session, body, reg)
+    url = f"http://{agent_host}:{port}/invoke"
+    out = await run_agent_http(url, body.message, context=invoke_context)
+    await _publish_bus(body, agent_host)
     display_agent = reg.name if reg is not None else agent_host
     return InvokeResponse(output=out, agent=display_agent)
+
+
+@router.post("/invoke/stream")
+async def invoke_stream(
+    body: InvokeRequest,
+    session: Session = Depends(get_session),
+) -> StreamingResponse:
+    """Server-Sent Events streaming invoke endpoint.
+
+    Connects to the agent's /invoke/stream endpoint (if supported) and
+    forwards each SSE chunk as-is to the caller.  Falls back to the
+    non-streaming /invoke endpoint and emits a single data event when the
+    agent does not expose /invoke/stream.
+
+    Event format (one per line, blank-line-separated):
+        data: <text chunk>\n\n
+        data: [DONE]\n\n   <- sent after the last chunk
+    """
+    reg = _resolve_registered(
+        session,
+        registered_agent_id=body.registered_agent_id,
+        agent_lookup=body.agent_lookup,
+    )
+    agent_host, port, invoke_context = _build_invoke_context(session, body, reg)
+    url_stream = f"http://{agent_host}:{port}/invoke/stream"
+    url_fallback = f"http://{agent_host}:{port}/invoke"
+
+    async def _event_generator():
+        try:
+            async for chunk in stream_agent_http(url_stream, body.message, context=invoke_context):
+                yield f"data: {chunk}\n\n"
+        except HTTPException:
+            # Agent does not support streaming — fall back to buffered invoke
+            try:
+                out = await run_agent_http(url_fallback, body.message, context=invoke_context)
+                yield f"data: {out}\n\n"
+            except HTTPException as exc:
+                yield f"data: [ERROR] {exc.detail}\n\n"
+                return
+        yield "data: [DONE]\n\n"
+        await _publish_bus(body, agent_host)
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

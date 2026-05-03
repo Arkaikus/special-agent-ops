@@ -1,19 +1,24 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import exists, or_
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
-from agent_gateway.api.schemas import AgentRead, AgentRegister
+from agent_gateway.api.schemas import AgentProbeResult, AgentRead, AgentRegister
 from agent_gateway.db import get_session
 from agent_gateway.models.orm import AgentProject, Project, RegisteredAgent
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 AGENT_AVAILABLE_TTL_SECONDS = 90
+AGENT_PROBE_TIMEOUT = 5.0  # seconds
 
 
 def _utc_now() -> datetime:
@@ -100,6 +105,48 @@ def get_agent(agent_id: int, session: Session = Depends(get_session)) -> AgentRe
     if not row:
         raise HTTPException(status_code=404, detail="agent not found")
     return _agent_to_read(session, row, now=_utc_now())
+
+
+@router.get("/{agent_id}/probe", response_model=AgentProbeResult)
+async def probe_agent(agent_id: int, session: Session = Depends(get_session)) -> AgentProbeResult:
+    """Actively probe the agent's /health endpoint and return liveness status.
+
+    Unlike the TTL-based `available` flag (which relies on heartbeats), this
+    endpoint makes a live HTTP GET to ``http://{host}:{port}/health`` and
+    returns the result immediately.  Useful for dashboards and readiness checks.
+    """
+    row = session.get(RegisteredAgent, agent_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="agent not found")
+
+    url = f"http://{row.host}:{row.port}/health"
+    try:
+        async with httpx.AsyncClient(timeout=AGENT_PROBE_TIMEOUT) as client:
+            r = await client.get(url)
+        reachable = r.status_code < 500
+        status_code = r.status_code
+        detail: str | None = None
+        if not reachable:
+            detail = r.text[:200]
+    except httpx.TimeoutException:
+        reachable = False
+        status_code = 0
+        detail = f"Timed out after {AGENT_PROBE_TIMEOUT}s"
+        logger.warning("Probe timeout for agent %s at %s", row.name, url)
+    except httpx.RequestError as exc:
+        reachable = False
+        status_code = 0
+        detail = str(exc)
+        logger.warning("Probe request error for agent %s at %s: %s", row.name, url, exc)
+
+    return AgentProbeResult(
+        agent_id=agent_id,
+        name=row.name,
+        url=url,
+        reachable=reachable,
+        status_code=status_code,
+        detail=detail,
+    )
 
 
 @router.post("/{agent_id}/projects/{project_id}", response_model=AgentRead)

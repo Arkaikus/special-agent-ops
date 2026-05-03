@@ -8,7 +8,7 @@ spec:
   model:
     type: ollama
     model_id: llama3.2
-    base_url: http://host.docker.internal:11434/v1
+    base_url: http://ollama:11434/v1
   mcpServers:
     - name: gitea
       transport: http

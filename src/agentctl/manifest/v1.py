@@ -29,7 +29,7 @@ class ModelOllama(BaseModel):
 
     type: Literal["ollama"] = "ollama"
     model_id: str
-    base_url: str = "http://host.docker.internal:11434/v1"
+    base_url: str = "http://ollama:11434/v1"
     api_key_env: str | None = None
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
 

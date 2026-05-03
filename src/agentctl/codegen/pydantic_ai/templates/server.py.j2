@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 {% if model.provider == "anthropic" %}
@@ -32,6 +34,7 @@ GATEWAY_URL = os.environ.get("GATEWAY_URL", "").strip()
 AGENT_NAME = os.environ.get("AGENT_NAME", "{{ agent_name }}").strip()
 AGENT_HOST = os.environ.get("AGENT_HOST", "{{ agent_name }}").strip()
 GATEWAY_HEARTBEAT_SEC = int(os.environ.get("GATEWAY_HEARTBEAT_SEC", "45"))
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434/v1").strip()
 MCP_SERVERS = {{ mcp_servers_literal }}
 _FS_ALLOW = {{ fs_allow_literal }}
 
@@ -116,7 +119,7 @@ def build_agent() -> Agent[None, str]:
 {% elif model.provider == "ollama" %}
     model = OllamaModel(
         "{{ model.model_id }}",
-        provider=OllamaProvider(base_url="{{ model.base_url }}"),
+        provider=OllamaProvider(base_url=OLLAMA_BASE_URL),
     )
 {% else %}
     _key = (
@@ -181,8 +184,26 @@ async def invoke(body: InvokeBody):
     assert _agent is not None
     text = body.message
     if body.context:
-        import json
-
         text = f"{body.message}\n\n(Gateway context: {json.dumps(body.context, sort_keys=True)})"
     result = await _agent.run(text)
     return {"output": result.output}
+
+
+@app.post("/invoke/stream")
+async def invoke_stream(body: InvokeBody):
+    assert _agent is not None
+    text = body.message
+    if body.context:
+        text = f"{body.message}\n\n(Gateway context: {json.dumps(body.context, sort_keys=True)})"
+
+    async def _generate():
+        try:
+            async with _agent.run_stream(text) as result:
+                async for chunk in result.stream_text(delta=True):
+                    # Replace newlines to keep each chunk as a single SSE data line
+                    yield f"data: {chunk.replace(chr(10), ' ')}\n\n"
+        except Exception as exc:
+            yield f"data: [ERROR] {exc!s}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(_generate(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"})

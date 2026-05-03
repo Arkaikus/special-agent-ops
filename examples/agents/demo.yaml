@@ -6,7 +6,7 @@ spec:
   model:
     type: ollama
     model_id: llama3.2
-    base_url: http://host.docker.internal:11434/v1
+    base_url: http://ollama:11434/v1
   prompts:
     system: You are a concise demo agent for agentctl.
   deploy:
