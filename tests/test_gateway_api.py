@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -261,3 +261,64 @@ def test_agent_available_ttl(client: TestClient, monkeypatch: pytest.MonkeyPatch
     )
     listed2 = client.get(f"/api/agents/{aid}")
     assert listed2.json()["available"] is False
+
+
+# ---------------------------------------------------------------------------
+# SSRF guard tests
+# ---------------------------------------------------------------------------
+
+
+def test_invoke_blocked_private_ip(client: TestClient) -> None:
+    """RFC-1918 IP addresses used as agent_name must be rejected with 400."""
+    inv = client.post(
+        "/api/invoke",
+        json={"message": "hi", "agent_name": "192.168.1.1", "agent_port": 8080},
+    )
+    assert inv.status_code == 400
+    assert "Blocked host" in inv.json()["detail"]
+
+
+def test_invoke_blocked_link_local_ip(client: TestClient) -> None:
+    """AWS/GCP metadata endpoint IP must be rejected with 400."""
+    inv = client.post(
+        "/api/invoke",
+        json={"message": "hi", "agent_name": "169.254.169.254", "agent_port": 80},
+    )
+    assert inv.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Bus fault isolation test
+# ---------------------------------------------------------------------------
+
+
+def test_invoke_bus_failure_does_not_crash_response(client: TestClient) -> None:
+    """A Redis bus publish error must not fail a successful invocation response."""
+    client.post(
+        "/api/agents/register",
+        json={"name": "bus-test-agent", "host": "mock-host", "port": 1234},
+    )
+    mock_bus = MagicMock()
+    mock_bus.publish = AsyncMock(side_effect=Exception("Redis down"))
+
+    with patch(
+        "agent_gateway.api.routes_invoke.run_agent_http",
+        new_callable=AsyncMock,
+        return_value="hello from agent",
+    ):
+        with patch(
+            "agent_gateway.api.routes_invoke.get_bus",
+            return_value=mock_bus,
+        ):
+            inv = client.post(
+                "/api/invoke",
+                json={
+                    "message": "ping",
+                    "agent_lookup": "bus-test-agent",
+                    "project_id": 1,
+                },
+            )
+
+    # The invocation must succeed even though bus.publish raised
+    assert inv.status_code == 200
+    assert inv.json()["output"] == "hello from agent"
