@@ -1,3 +1,8 @@
+networks:
+  agentctl-net:
+    external: true
+    name: agentctl-net
+
 services:
   {{ service_name }}:
     build:

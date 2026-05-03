@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 
 import httpx
 from fastapi import HTTPException
@@ -57,3 +58,57 @@ async def run_agent_http(
         out = data["output"]
         return out if isinstance(out, str) else str(out)
     return str(data)
+
+
+async def stream_agent_http(
+    url: str,
+    message: str,
+    *,
+    context: dict | None = None,
+    timeout: float = 120.0,
+) -> AsyncIterator[str]:
+    """Stream text chunks from an agent's /invoke/stream SSE endpoint.
+
+    Yields each non-empty data payload as a plain string.  Stops when the
+    agent closes the connection or sends a ``[DONE]`` sentinel.
+
+    Raises HTTPException(502/504) on network or upstream errors so callers
+    can fall back to the buffered invoke path.
+    """
+    payload: dict = {"message": message}
+    if context:
+        payload["context"] = context
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream("POST", url, json=payload) as r:
+                if r.status_code == 404:
+                    # Agent does not support streaming
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Agent streaming endpoint not found",
+                    )
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    chunk = line[len("data:"):].strip()
+                    if not chunk or chunk == "[DONE]":
+                        break
+                    yield chunk
+    except HTTPException:
+        raise
+    except httpx.TimeoutException as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=f"Agent stream timed out after {timeout}s",
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Agent stream returned HTTP {exc.response.status_code}",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Agent stream unreachable: {exc}",
+        ) from exc
