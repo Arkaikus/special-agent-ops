@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import re
 
@@ -19,7 +20,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["invoke"])
 
 # Allow only safe hostnames / IPv4 addresses for ad-hoc host routing.
-# Blocks bare IPs of internal ranges, metadata endpoints, etc.
 _SAFE_HOST_RE = re.compile(
     r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?"
     r"(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$"
@@ -35,9 +35,18 @@ _BLOCKED_HOSTS = frozenset({
 })
 
 
+def _is_private_ip(host: str) -> bool:
+    """Return True if *host* parses as an IP address in a non-routable range."""
+    try:
+        addr = ipaddress.ip_address(host)
+        return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved
+    except ValueError:
+        return False
+
+
 def _validate_ad_hoc_host(host: str) -> None:
     """Raise 400 if the host string is not a safe Docker-network hostname."""
-    if host in _BLOCKED_HOSTS:
+    if host in _BLOCKED_HOSTS or _is_private_ip(host):
         raise HTTPException(status_code=400, detail=f"Blocked host: {host!r}")
     if not _SAFE_HOST_RE.match(host):
         raise HTTPException(
