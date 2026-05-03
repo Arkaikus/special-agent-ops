@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Generator
 
 from sqlalchemy import inspect, text
 from sqlmodel import Session, SQLModel, create_engine
 
 from agent_gateway.settings import settings
+
+logger = logging.getLogger(__name__)
 
 connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
 engine = create_engine(settings.database_url, connect_args=connect_args)
@@ -51,8 +54,12 @@ def _sqlite_migrate_registered_agent_to_agent_project() -> None:
             )
             try:
                 conn.execute(text("ALTER TABLE registered_agent DROP COLUMN visual_project_id"))
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Could not drop legacy column registered_agent.visual_project_id "
+                    "(non-fatal, will retry on next start): %s",
+                    exc,
+                )
             conn.commit()
             cols = {c["name"] for c in inspect(engine).get_columns("registered_agent")}
         if "project_id" in cols:
@@ -64,8 +71,12 @@ def _sqlite_migrate_registered_agent_to_agent_project() -> None:
             )
             try:
                 conn.execute(text("ALTER TABLE registered_agent DROP COLUMN project_id"))
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Could not drop legacy column registered_agent.project_id "
+                    "(non-fatal, will retry on next start): %s",
+                    exc,
+                )
             conn.commit()
 
 
