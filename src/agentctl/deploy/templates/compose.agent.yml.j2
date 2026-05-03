@@ -16,6 +16,7 @@ services:
       AGENT_HOST: {{ service_name }}
       AGENT_NAME: {{ agent_name }}
       GATEWAY_HEARTBEAT_SEC: ${GATEWAY_HEARTBEAT_SEC:-45}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434/v1}
 {% if has_workspace %}
       WORKSPACE_ROOT: "{{ workspace_root }}"
 {% endif %}

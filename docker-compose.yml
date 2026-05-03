@@ -89,6 +89,21 @@ services:
     depends_on:
       - gateway
 
+  # Ollama — local LLM inference server.
+  # Enable with: docker compose --profile ollama up
+  # GPU (NVIDIA): add 'deploy' block with nvidia runtime or set OLLAMA_GPU_OPTS in .env.
+  # Pull a model after first start: docker compose exec ollama ollama pull llama3.2
+  ollama:
+    image: ollama/ollama:latest
+    profiles:
+      - ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - agentctl-net
+
 networks:
   agentctl-net:
     driver: bridge
@@ -100,3 +115,4 @@ volumes:
   gitea-data: {}
   gateway-data: {}
   agentctl-shared-ws: {}
+  ollama-data: {}

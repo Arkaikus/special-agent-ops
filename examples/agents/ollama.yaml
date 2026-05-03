@@ -1,0 +1,24 @@
+# Ollama agent — runs against the ollama service defined in docker-compose.yml.
+#
+# Prerequisites:
+#   1. docker compose --profile ollama up -d ollama
+#   2. docker compose exec ollama ollama pull llama3.2
+#   3. agentctl apply examples/agents/ollama.yaml
+#   4. agentctl deploy ollama
+#
+# OLLAMA_BASE_URL defaults to http://ollama:11434/v1 (compose service name).
+# Override via .env or environment if you point to a different Ollama instance.
+apiVersion: agentctl/v1
+metadata:
+  name: ollama
+spec:
+  runtime: pydantic-ai
+  model:
+    type: ollama
+    model_id: llama3.2
+    base_url: http://ollama:11434/v1
+  prompts:
+    system: You are a helpful assistant powered by a local Ollama model.
+  deploy:
+    port: 8090
+    composeService: ollama-agent
