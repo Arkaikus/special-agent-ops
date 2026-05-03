@@ -34,7 +34,7 @@ GATEWAY_URL = os.environ.get("GATEWAY_URL", "").strip()
 AGENT_NAME = os.environ.get("AGENT_NAME", "{{ agent_name }}").strip()
 AGENT_HOST = os.environ.get("AGENT_HOST", "{{ agent_name }}").strip()
 GATEWAY_HEARTBEAT_SEC = int(os.environ.get("GATEWAY_HEARTBEAT_SEC", "45"))
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "{{ model.base_url if model.provider == 'ollama' else 'http://ollama:11434/v1' }}").strip()
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434/v1").strip()
 MCP_SERVERS = {{ mcp_servers_literal }}
 _FS_ALLOW = {{ fs_allow_literal }}
 

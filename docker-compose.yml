@@ -91,7 +91,7 @@ services:
 
   # Ollama — local LLM inference server.
   # Enable with: docker compose --profile ollama up
-  # GPU (NVIDIA): add 'deploy' block with nvidia runtime or set OLLAMA_GPU_OPTS in .env.
+  # GPU (NVIDIA): uncomment the 'deploy' block below and ensure the nvidia-container-toolkit is installed.
   # Pull a model after first start: docker compose exec ollama ollama pull llama3.2
   ollama:
     image: ollama/ollama:latest
@@ -103,6 +103,14 @@ services:
       - ollama-data:/root/.ollama
     networks:
       - agentctl-net
+    # Uncomment to enable NVIDIA GPU access:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
 
 networks:
   agentctl-net:
