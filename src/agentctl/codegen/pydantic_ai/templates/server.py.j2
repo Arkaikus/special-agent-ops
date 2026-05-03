@@ -196,9 +196,13 @@ async def invoke_stream(body: InvokeBody):
         text = f"{body.message}\n\n(Gateway context: {json.dumps(body.context, sort_keys=True)})"
 
     async def _generate():
-        async with _agent.run_stream(text) as result:
-            async for chunk in result.stream_text(delta=True):
-                yield f"data: {chunk}\n\n"
+        try:
+            async with _agent.run_stream(text) as result:
+                async for chunk in result.stream_text(delta=True):
+                    # Replace newlines to keep each chunk as a single SSE data line
+                    yield f"data: {chunk.replace(chr(10), ' ')}\n\n"
+        except Exception as exc:
+            yield f"data: [ERROR] {exc!s}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(_generate(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"})
