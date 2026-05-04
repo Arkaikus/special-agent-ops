@@ -119,7 +119,9 @@ def build_agent() -> Agent[None, str]:
 {% elif model.provider == "ollama" %}
     model = OllamaModel(
         "{{ model.model_id }}",
-        provider=OllamaProvider(base_url=OLLAMA_BASE_URL),
+        provider=OllamaProvider(
+            base_url="{{ model.base_url }}",
+        ),
     )
 {% else %}
     _key = (

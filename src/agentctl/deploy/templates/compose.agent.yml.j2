@@ -26,6 +26,9 @@ services:
       - agentctl-net
     depends_on:
       - redis
+{% if depends_on_ollama %}
+      - ollama
+{% endif %}
 {% if service_volumes %}
     volumes:
 {% for line in service_volumes %}

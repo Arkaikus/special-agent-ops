@@ -9,6 +9,8 @@ from agentctl import __version__
 from agentctl.cli.apply import run_apply
 from agentctl.cli.deploy import run_deploy
 from agentctl.cli.doctor import run_doctor
+from agentctl.cli.exec_ import run_exec
+from agentctl.cli.logs import run_logs
 from agentctl.cli.undeploy import run_undeploy
 from agentctl.cli.list_agents import run_list
 
@@ -80,6 +82,26 @@ def list_agents(
 ) -> None:
     """List all agents scaffolded under .agents/ with their runtime and compose config."""
     run_list(agents_dir)
+
+
+@app.command("exec")
+def exec_agent(
+    agent_name: str = typer.Argument(..., help="Agent name (directory under .agents/)."),
+    shell: str = typer.Option("/bin/bash", "--shell", "-s", help="Shell to launch inside the container."),
+) -> None:
+    """Attach an interactive shell inside a running agent container."""
+    run_exec(agent_name, shell=shell)
+
+
+@app.command("logs")
+def logs(
+    agent_name: str = typer.Argument(..., help="Agent name (directory under .agents/)."),
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output."),
+    tail: int | None = typer.Option(None, "--tail", "-n", help="Number of lines to show from the end."),
+    since: str | None = typer.Option(None, "--since", help="Show logs since timestamp or duration (e.g. 5m, 1h)."),
+) -> None:
+    """Show docker compose logs for a deployed agent (useful for debugging output)."""
+    run_logs(agent_name, follow=follow, tail=tail, since=since)
 
 
 @app.command("doctor")

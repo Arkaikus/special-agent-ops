@@ -5,7 +5,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from agentctl.codegen.context import CodegenContext
-from agentctl.manifest.v1 import effective_fs_allow, workspace_root_for_spec
+from agentctl.manifest.v1 import ModelOllama, effective_fs_allow, workspace_root_for_spec
 
 
 def _env() -> Environment:
@@ -66,6 +66,7 @@ def render_agent_compose(ctx: CodegenContext) -> str:
             service_volumes.append(line)
 
     extra_hosts = list(ctx.manifest.spec.deploy.extra_hosts)
+    depends_on_ollama = isinstance(ctx.manifest.spec.model, ModelOllama)
     tpl = _env().get_template("compose.agent.yml.j2")
     return tpl.render(
         service_name=service,
@@ -77,4 +78,5 @@ def render_agent_compose(ctx: CodegenContext) -> str:
         extra_hosts=extra_hosts,
         workspace_root=wr or "/workspace",
         has_workspace=has_w and wr is not None,
+        depends_on_ollama=depends_on_ollama,
     )
