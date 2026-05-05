@@ -25,7 +25,14 @@ def _expand_message(message: str, workspace: Path) -> str:
 
     def _replace(m: re.Match) -> str:  # type: ignore[type-arg]
         rel = m.group(1)
-        candidate = workspace / rel
+        # Prevent path traversal by ensuring the resolved path stays within workspace
+        try:
+            candidate = (workspace / rel).resolve()
+            workspace_resolved = workspace.resolve()
+            candidate.relative_to(workspace_resolved)  # raises ValueError if outside
+        except ValueError:
+            console.print(f"[yellow]Warning: file reference outside workspace rejected: {rel}[/yellow]")
+            return m.group(0)
         if candidate.is_file():
             content = candidate.read_text(encoding="utf-8")
             return f"\n\n--- {rel} ---\n{content}\n--- end {rel} ---\n\n"

@@ -123,7 +123,7 @@ class WorkspaceSearchService:
         for path in self._workspace_path.rglob("*"):
             if not path.is_file():
                 continue
-            if path.suffix.lower() not in _TEXT_EXTENSIONS and "." not in path.name:
+            if path.suffix.lower() not in _TEXT_EXTENSIONS:
                 continue
             content = _read_file(path)
             if content is None:
