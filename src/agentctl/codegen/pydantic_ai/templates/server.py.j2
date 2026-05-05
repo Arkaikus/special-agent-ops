@@ -238,10 +238,26 @@ async def invoke_stream(body: InvokeBody):
 
     async def _generate():
         try:
-            async with agent.run_stream(text) as result:
-                async for chunk in result.stream_text(delta=True):
-                    # Replace newlines to keep each chunk as a single SSE data line
-                    yield f"data: {chunk.replace(chr(10), ' ')}\n\n"
+            # agent.iter() runs the full tool-call loop and yields each graph node,
+            # giving visibility into every tool invocation before emitting the final text.
+            async with agent.iter(text) as run:
+                async for node in run:
+                    if Agent.is_call_tools_node(node):
+                        for part in node.model_response.parts:
+                            if hasattr(part, "tool_name"):
+                                try:
+                                    args_display = (
+                                        json.dumps(part.args)
+                                        if isinstance(part.args, dict)
+                                        else str(part.args)
+                                    )
+                                except Exception:
+                                    args_display = str(part.args)
+                                yield f"data: [TOOL_CALL] {part.tool_name}({args_display})\n\n"
+                    elif Agent.is_end_node(node):
+                        output = node.data.output
+                        # Replace newlines to keep each chunk as a single SSE data line
+                        yield f"data: {output.replace(chr(10), ' ')}\n\n"
         except Exception as exc:
             yield f"data: [ERROR] {exc!s}\n\n"
         yield "data: [DONE]\n\n"
