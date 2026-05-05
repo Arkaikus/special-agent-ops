@@ -136,7 +136,11 @@ if "ls" in _FS_ALLOW:
 
     @agent.tool_plain
     async def ls(path: str = ".") -> str:
-        """List files and directories under a path relative to the workspace root."""
+        """List files and directories under a path relative to the workspace root.
+
+        Paths must be relative (no leading slash or '..' components). Returns
+        a newline-separated listing with a leading 'd' or 'f' type prefix.
+        """
         return await workspace_tools.tool_ls(path)
 
 if "grep" in _FS_ALLOW:
@@ -157,14 +161,23 @@ if "edit" in _FS_ALLOW:
 
     @agent.tool_plain
     async def edit(path: str, old_text: str | None, new_text: str) -> str:
-        """Replace old_text with new_text in a file, or write new_text if old_text is empty (full replace)."""
+        """Replace old_text with new_text in a file (relative workspace path).
+
+        Pass old_text=None or old_text='' to overwrite the entire file with
+        new_text. Otherwise replaces the first occurrence of old_text.
+        """
         return await workspace_tools.tool_edit(path, old_text, new_text)
 
 if "bash" in _FS_ALLOW:
 
     @agent.tool_plain
     async def bash(cmd: str) -> str:
-        """Run a shell command with cwd=workspace (use with care)."""
+        """Run a shell command inside the workspace directory (timeout: 45 s).
+
+        Runs with cwd set to the workspace root. Output is capped at 20 000
+        characters. Avoid commands that modify files outside the workspace or
+        expose secrets via environment variables.
+        """
         return await workspace_tools.tool_bash(cmd)
 
 {% endif %}
