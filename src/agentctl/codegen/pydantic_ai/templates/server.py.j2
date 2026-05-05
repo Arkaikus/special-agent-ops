@@ -25,7 +25,6 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.mcp import MCPServerHTTP, MCPServerStdio, MCPServerSSE
 {% endif %}
 {% if has_fs %}
-from pydantic_ai.tools import FunctionToolset
 import workspace_tools
 {% endif %}
 
@@ -99,72 +98,106 @@ def _build_mcp_toolsets() -> list:
     return toolsets
 
 
-def _build_fs_toolset() -> list:
-    """Wrap allowed fs-tool callables in a FunctionToolset.
-
-    Returns a one-element list (or empty) so the result can be directly
-    concatenated with the MCP toolsets list and passed to toolsets=.
-    """
-{% if has_fs %}
-    reg = {
-        "ls": workspace_tools.tool_ls,
-        "grep": workspace_tools.tool_grep,
-        "edit": workspace_tools.tool_edit,
-        "glob": workspace_tools.tool_glob,
-        "bash": workspace_tools.tool_bash,
-    }
-    fns = [reg[k] for k in _FS_ALLOW if k in reg]
-    return [FunctionToolset(fns)] if fns else []
-{% else %}
-    return []
-{% endif %}
-
-
-def build_agent() -> Agent[None, str]:
-    system_prompt = """{{ system_prompt | e }}"""
+# --- Model ---
 {% if model.provider == "anthropic" %}
-    _ = os.environ.get("{{ model.api_key_env }}")
-    model = AnthropicModel("{{ model.model_id }}")
+_ = os.environ.get("{{ model.api_key_env }}")
+_model = AnthropicModel("{{ model.model_id }}")
 {% elif model.provider == "ollama" %}
-    model = OllamaModel(
-        "{{ model.model_id }}",
-        provider=OllamaProvider(
-            base_url="{{ model.base_url }}",
-        ),
-    )
+_model = OllamaModel(
+    "{{ model.model_id }}",
+    provider=OllamaProvider(
+        base_url="{{ model.base_url }}",
+    ),
+)
 {% else %}
-    _key = (
-        os.environ.get("{{ model.api_key_env }}", "sk-local")
-        if "{{ model.api_key_env }}"
-        else "sk-local"
-    )
-    model = OpenAIChatModel(
-        "{{ model.model_id }}",
-        provider=OpenAIProvider(base_url="{{ model.base_url }}", api_key=_key),
-    )
+_key = (
+    os.environ.get("{{ model.api_key_env }}", "sk-local")
+    if "{{ model.api_key_env }}"
+    else "sk-local"
+)
+_model = OpenAIChatModel(
+    "{{ model.model_id }}",
+    provider=OpenAIProvider(base_url="{{ model.base_url }}", api_key=_key),
+)
 {% endif %}
-    # All tool providers (MCP servers + fs-tool FunctionToolset) go into
-    # a single toolsets= kwarg — pydantic-ai >= 0.0.24 unified API.
-    toolsets = _build_mcp_toolsets() + _build_fs_toolset()
-    kw: dict = {"model": model, "system_prompt": system_prompt}
-    if toolsets:
-        kw["toolsets"] = toolsets
-    return Agent(**kw)
 
+# --- Agent ---
+# MCP servers are passed via toolsets=; workspace tools are registered with @agent.tool_plain.
+agent: Agent[None, str] = Agent(
+    _model,
+    toolsets=_build_mcp_toolsets(),
+    system_prompt="""{{ system_prompt | e }}""",
+)
 
-_agent: Agent[None, str] | None = None
+{% if has_fs %}
+# Workspace filesystem tools — registered directly on the agent.
+# Only tools listed in _FS_ALLOW are exposed to the model.
+if "ls" in _FS_ALLOW:
+
+    @agent.tool_plain
+    async def ls(path: str = ".") -> str:
+        """List files and directories under a path relative to the workspace root.
+
+        Paths must be relative (no leading slash or '..' components). Returns
+        a newline-separated listing with a leading 'd' or 'f' type prefix.
+        """
+        return await workspace_tools.tool_ls(path)
+
+if "grep" in _FS_ALLOW:
+
+    @agent.tool_plain
+    async def grep(pattern: str, path: str = ".", glob_pattern: str = "**/*") -> str:
+        """Search text files under path for a regex pattern (bounded)."""
+        return await workspace_tools.tool_grep(pattern, path, glob_pattern)
+
+if "glob" in _FS_ALLOW:
+
+    @agent.tool_plain
+    async def glob(pattern: str) -> str:
+        """Glob files relative to workspace (e.g. '*.py', 'src/**/*.ts')."""
+        return await workspace_tools.tool_glob(pattern)
+
+if "edit" in _FS_ALLOW:
+
+    @agent.tool_plain
+    async def edit(path: str, old_text: str | None, new_text: str) -> str:
+        """Replace old_text with new_text in a file (relative workspace path).
+
+        Pass old_text=None or old_text='' to overwrite the entire file with
+        new_text. Otherwise replaces the first occurrence of old_text.
+        """
+        return await workspace_tools.tool_edit(path, old_text, new_text)
+
+if "bash" in _FS_ALLOW:
+
+    @agent.tool_plain
+    async def bash(cmd: str) -> str:
+        """Run a shell command inside the workspace directory (timeout: 45 s).
+
+        Runs with cwd set to the workspace root. Output is capped at 20 000
+        characters. Avoid commands that modify files outside the workspace or
+        expose secrets via environment variables.
+        """
+        return await workspace_tools.tool_bash(cmd)
+
+{% endif %}
+
 _heartbeat_task: asyncio.Task[None] | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _agent, _heartbeat_task
-    _agent = build_agent()
+    global _heartbeat_task
     await _register_with_gateway()
     if GATEWAY_URL and GATEWAY_HEARTBEAT_SEC > 0:
         _heartbeat_task = asyncio.create_task(_gateway_heartbeat_loop())
     try:
+{% if has_mcp %}
+        async with agent.run_mcp_servers():
+            yield
+{% else %}
         yield
+{% endif %}
     finally:
         if _heartbeat_task is not None:
             _heartbeat_task.cancel()
@@ -173,7 +206,6 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
             _heartbeat_task = None
-        _agent = None
 
 
 app = FastAPI(title="{{ agent_name }}", lifespan=lifespan)
@@ -191,27 +223,37 @@ async def health():
 
 @app.post("/invoke")
 async def invoke(body: InvokeBody):
-    assert _agent is not None
     text = body.message
     if body.context:
         text = f"{body.message}\n\n(Gateway context: {json.dumps(body.context, sort_keys=True)})"
-    result = await _agent.run(text)
+    result = await agent.run(text)
     return {"output": result.output}
 
 
 @app.post("/invoke/stream")
 async def invoke_stream(body: InvokeBody):
-    assert _agent is not None
     text = body.message
     if body.context:
         text = f"{body.message}\n\n(Gateway context: {json.dumps(body.context, sort_keys=True)})"
 
     async def _generate():
         try:
-            async with _agent.run_stream(text) as result:
-                async for chunk in result.stream_text(delta=True):
-                    # Replace newlines to keep each chunk as a single SSE data line
-                    yield f"data: {chunk.replace(chr(10), ' ')}\n\n"
+            # agent.iter() runs the full tool-call loop and yields each graph node,
+            # giving visibility into every tool invocation before emitting the final text.
+            async with agent.iter(text) as run:
+                async for node in run:
+                    if Agent.is_call_tools_node(node):
+                        for part in node.model_response.parts:
+                            if hasattr(part, "tool_name"):
+                                try:
+                                    args_display = json.dumps(part.args, default=str)
+                                except Exception:
+                                    args_display = str(part.args)
+                                yield f"data: [TOOL_CALL] {part.tool_name}({args_display})\n\n"
+                    elif Agent.is_end_node(node):
+                        output = node.data.output
+                        # Replace newlines to keep each chunk as a single SSE data line
+                        yield f"data: {output.replace('\n', ' ')}\n\n"
         except Exception as exc:
             yield f"data: [ERROR] {exc!s}\n\n"
         yield "data: [DONE]\n\n"

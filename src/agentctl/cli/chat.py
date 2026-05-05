@@ -82,6 +82,13 @@ def _send_message(
                             if chunk.startswith("[ERROR]"):
                                 console.print(f"\n[red]{chunk}[/red]")
                                 return
+                            if chunk.startswith("[TOOL_CALL] "):
+                                # Tool invocation event — show as dim annotation, not part of response
+                                console.print(
+                                    f"\n[dim yellow]  ⚙ {chunk.removeprefix('[TOOL_CALL] ')}[/dim yellow]",
+                                    end="",
+                                )
+                                continue
                             # Restore newlines escaped for SSE transport
                             decoded = chunk.replace("\\n", "\n")
                             console.print(decoded, end="", highlight=False)
