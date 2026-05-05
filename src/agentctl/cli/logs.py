@@ -20,7 +20,7 @@ def run_logs(
 ) -> None:
     """Stream or print docker compose logs for a deployed agent service."""
     repo = find_repo_root()
-    agent_dir = (repo / ".agents" / agent_name).resolve()
+    agent_dir = (repo / ".cache" / agent_name).resolve()
 
     if not agent_dir.is_dir():
         raise SystemExit(

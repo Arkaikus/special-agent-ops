@@ -11,8 +11,13 @@ from agent_gateway.api.routes_board import router as board_router
 from agent_gateway.api.routes_health import router as health_router
 from agent_gateway.api.routes_invoke import router as invoke_router
 from agent_gateway.api.routes_projects import router as projects_router
+from agent_gateway.api.routes_workspace import router as workspace_router
 from agent_gateway.db import init_db
 from agent_gateway.services.bus import set_bus
+from agent_gateway.services.workspace_search import (
+    WorkspaceSearchService,
+    set_workspace_search,
+)
 from agent_gateway.settings import settings
 from agentctl.redis_bus.client import RedisBus
 
@@ -24,9 +29,21 @@ async def lifespan(app: FastAPI):
     bus = RedisBus(settings.redis_url)
     await bus.connect()
     set_bus(bus)
+
+    ws_svc = WorkspaceSearchService(
+        chromadb_url=settings.chromadb_url,
+        workspace_path=settings.workspace_path,
+    )
+    ws_svc.connect()
+    ws_svc.index_workspace()
+    set_workspace_search(ws_svc)
+
     yield
+
     await bus.aclose()
     set_bus(None)
+    ws_svc.close()
+    set_workspace_search(None)
 
 
 app = FastAPI(title="agent-gateway", lifespan=lifespan)
@@ -45,6 +62,7 @@ app.include_router(projects_router)
 app.include_router(agents_router)
 app.include_router(board_router)
 app.include_router(invoke_router)
+app.include_router(workspace_router)
 
 
 def main() -> None:

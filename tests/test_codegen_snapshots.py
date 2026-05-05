@@ -22,7 +22,7 @@ def test_apply_generates_server(repo_root: Path) -> None:
     os.chdir(repo_root)
     man = repo_root / "examples" / "agents" / "demo.yaml"
     run_apply(man, dry_run=False, force=True)
-    server = repo_root / ".agents" / "demo" / "python" / "server.py"
+    server = repo_root / ".cache" / "demo" / "python" / "server.py"
     text = server.read_text(encoding="utf-8")
     assert "FastAPI" in text
     assert "OllamaModel" in text
@@ -57,7 +57,7 @@ spec:
     m = load_manifest_from_path(p)
     assert m.spec.model.type == "openai_compatible"
     run_apply(p, dry_run=False, force=True)
-    t = (repo_root / ".agents" / "codex" / "python" / "server.py").read_text(encoding="utf-8")
+    t = (repo_root / ".cache" / "codex" / "python" / "server.py").read_text(encoding="utf-8")
     assert "OpenAIChatModel" in t
 
 
@@ -95,7 +95,7 @@ spec:
         encoding="utf-8",
     )
     run_apply(p, dry_run=False, force=True)
-    server = (repo_root / ".agents" / "fs-test" / "python" / "server.py").read_text(encoding="utf-8")
+    server = (repo_root / ".cache" / "fs-test" / "python" / "server.py").read_text(encoding="utf-8")
     assert "workspace_tools" in server
     assert "_mcp_http_headers" in server
-    assert (repo_root / ".agents" / "fs-test" / "python" / "workspace_tools.py").is_file()
+    assert (repo_root / ".cache" / "fs-test" / "python" / "workspace_tools.py").is_file()
