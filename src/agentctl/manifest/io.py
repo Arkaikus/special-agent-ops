@@ -32,6 +32,13 @@ def _load_md_frontmatter(path: Path) -> AgentManifest:
     Frontmatter keys accepted:
       name, description, runtime, model, volumes, tools, mcp, skills, deploy
 
+    ``tools`` may contain:
+      - strings: fs-tool names (ls, grep, edit, glob, bash)
+      - dicts:   MCP server objects (merged with ``mcp`` entries)
+
+    ``mcp`` is kept for backwards compatibility; its entries are merged with
+    any dict entries found in ``tools``.
+
     The markdown body (after the closing ``---``) becomes ``spec.prompts.system``.
     """
     raw = path.read_text(encoding="utf-8")
@@ -67,15 +74,29 @@ def _load_md_frontmatter(path: Path) -> AgentManifest:
     raw_volumes: list[dict] = fm.get("volumes", [])
     volumes = [_parse_volume(v) for v in raw_volumes]
 
-    # -- tools (fs_tools) -----------------------------------------------------
-    raw_tools: list[str] = fm.get("tools", [])
-    fs_tools: FsToolsConfig | None = None
-    if raw_tools:
-        fs_tools = FsToolsConfig(enabled=True, allow=raw_tools)  # type: ignore[arg-type]
-
-    # -- mcp servers ----------------------------------------------------------
+    # -- tools: split fs-tool strings from MCP server dicts -------------------
+    # tools: [ls, grep, glob]          → fs_tools
+    # tools: [{name: myserver, ...}]   → mcp_servers  (folded in)
+    # mcp:   [{name: myserver, ...}]   → mcp_servers  (legacy key, still works)
+    raw_tools: list[Any] = fm.get("tools", [])
     raw_mcp: list[dict] = fm.get("mcp", [])
-    mcp_servers = [McpServer.model_validate(s) for s in raw_mcp]
+
+    fs_tool_names: list[str] = []
+    mcp_from_tools: list[dict] = []
+
+    for item in raw_tools:
+        if isinstance(item, str):
+            fs_tool_names.append(item)
+        elif isinstance(item, dict):
+            mcp_from_tools.append(item)
+
+    # Merge MCP entries from both tools: dicts and the legacy mcp: key
+    all_mcp_raw: list[dict] = mcp_from_tools + list(raw_mcp)
+    mcp_servers = [McpServer.model_validate(s) for s in all_mcp_raw]
+
+    fs_tools: FsToolsConfig | None = None
+    if fs_tool_names:
+        fs_tools = FsToolsConfig(enabled=True, allow=fs_tool_names)  # type: ignore[arg-type]
 
     # -- skills ---------------------------------------------------------------
     raw_skills: list[Any] = fm.get("skills", [])
@@ -90,12 +111,10 @@ def _load_md_frontmatter(path: Path) -> AgentManifest:
     raw_deploy: dict = fm.get("deploy", {})
     deploy = DeployConfig.model_validate(raw_deploy) if raw_deploy else DeployConfig()
 
-    # -- workspace ---------------------------------------------------------------
-    # Automatically mount .workspace when volumes are declared but no explicit
-    # workspace folder is provided.
+    # -- workspaces -----------------------------------------------------------
     workspaces = WorkspacesConfig(volumes=volumes)
 
-    # -- system prompt from body -----------------------------------------------
+    # -- system prompt from body ----------------------------------------------
     prompts: dict[str, str] = {}
     if body:
         prompts["system"] = body
