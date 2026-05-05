@@ -25,6 +25,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.mcp import MCPServerHTTP, MCPServerStdio, MCPServerSSE
 {% endif %}
 {% if has_fs %}
+from pydantic_ai.tools import FunctionToolset
 import workspace_tools
 {% endif %}
 
@@ -69,12 +70,12 @@ def _mcp_http_headers(entry: dict) -> dict | None:
     return h or None
 
 
-def _build_toolsets() -> list:
-    """Build MCP toolset objects for Agent(toolsets=...).
+def _build_mcp_toolsets() -> list:
+    """Build MCP server toolset objects.
 
-    Iterates MCP_SERVERS unconditionally (safe when list is empty), so
-    this function is correct regardless of whether MCP servers were
-    declared via ``mcp:`` or as dict entries inside ``tools:``.
+    Iterates MCP_SERVERS unconditionally (safe when the list is empty).
+    MCP servers may be declared via ``mcp:`` or as dict entries inside
+    ``tools:`` — both are merged into MCP_SERVERS by the manifest loader.
     """
     toolsets = []
     for entry in MCP_SERVERS:
@@ -98,8 +99,12 @@ def _build_toolsets() -> list:
     return toolsets
 
 
-def _build_fs_tools() -> list:
-    """Build fs-tool callables for Agent(tools=...)."""
+def _build_fs_toolset() -> list:
+    """Wrap allowed fs-tool callables in a FunctionToolset.
+
+    Returns a one-element list (or empty) so the result can be directly
+    concatenated with the MCP toolsets list and passed to toolsets=.
+    """
 {% if has_fs %}
     reg = {
         "ls": workspace_tools.tool_ls,
@@ -108,7 +113,8 @@ def _build_fs_tools() -> list:
         "glob": workspace_tools.tool_glob,
         "bash": workspace_tools.tool_bash,
     }
-    return [reg[k] for k in _FS_ALLOW if k in reg]
+    fns = [reg[k] for k in _FS_ALLOW if k in reg]
+    return [FunctionToolset(fns)] if fns else []
 {% else %}
     return []
 {% endif %}
@@ -137,15 +143,12 @@ def build_agent() -> Agent[None, str]:
         provider=OpenAIProvider(base_url="{{ model.base_url }}", api_key=_key),
     )
 {% endif %}
-    # toolsets= receives MCP server wrappers (pydantic-ai >= 0.0.24 unified API)
-    # tools=    receives plain callable fs-tools (independent of toolsets)
-    toolsets = _build_toolsets()
-    tools = _build_fs_tools()
+    # All tool providers (MCP servers + fs-tool FunctionToolset) go into
+    # a single toolsets= kwarg — pydantic-ai >= 0.0.24 unified API.
+    toolsets = _build_mcp_toolsets() + _build_fs_toolset()
     kw: dict = {"model": model, "system_prompt": system_prompt}
     if toolsets:
         kw["toolsets"] = toolsets
-    if tools:
-        kw["tools"] = tools
     return Agent(**kw)
 
 
