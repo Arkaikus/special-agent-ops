@@ -103,7 +103,10 @@ def doctor() -> None:
 
 @app.command("chat")
 def chat(
-    agent: str = typer.Argument(..., help="Agent name to chat with (supports @agent syntax)."),
+    agent: str | None = typer.Argument(
+        None,
+        help="Agent to chat with (supports @agent syntax). Omit for general multi-agent mode.",
+    ),
     message: str | None = typer.Argument(None, help="Message to send. Omit for interactive mode."),
     gateway: str = typer.Option(
         "http://localhost:8000",
@@ -120,11 +123,17 @@ def chat(
     ),
     stream: bool = typer.Option(True, "--stream/--no-stream", help="Stream the agent response."),
 ) -> None:
-    """Chat directly with a deployed agent via the gateway.
+    """Chat with agents via the gateway.
 
-    Agent name may be prefixed with @ (e.g. @architect).
+    Without an agent name, enters general mode where you can direct messages to
+    any agent using /<agentname> or @agentname <message>.
+
+    Slash commands available in interactive mode:
+      /up [agent]    /stop [agent]    /down [agent]
+      /list          /logs <agent>    /doctor
+      /help          /exit
+
     Messages may reference workspace files with @filename (e.g. @docs/adr.md).
-    Omit MESSAGE to enter interactive mode.
     """
     run_chat(
         agent=agent,
@@ -140,7 +149,3 @@ app.add_typer(project_app, name="project")
 
 def main() -> None:
     app()
-
-
-if __name__ == "__main__":
-    main()
