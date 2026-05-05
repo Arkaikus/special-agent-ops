@@ -246,18 +246,14 @@ async def invoke_stream(body: InvokeBody):
                         for part in node.model_response.parts:
                             if hasattr(part, "tool_name"):
                                 try:
-                                    args_display = (
-                                        json.dumps(part.args)
-                                        if isinstance(part.args, dict)
-                                        else str(part.args)
-                                    )
+                                    args_display = json.dumps(part.args, default=str)
                                 except Exception:
                                     args_display = str(part.args)
                                 yield f"data: [TOOL_CALL] {part.tool_name}({args_display})\n\n"
                     elif Agent.is_end_node(node):
                         output = node.data.output
                         # Replace newlines to keep each chunk as a single SSE data line
-                        yield f"data: {output.replace(chr(10), ' ')}\n\n"
+                        yield f"data: {output.replace('\n', ' ')}\n\n"
         except Exception as exc:
             yield f"data: [ERROR] {exc!s}\n\n"
         yield "data: [DONE]\n\n"

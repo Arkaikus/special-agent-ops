@@ -85,7 +85,7 @@ def _send_message(
                             if chunk.startswith("[TOOL_CALL] "):
                                 # Tool invocation event — show as dim annotation, not part of response
                                 console.print(
-                                    f"\n[dim yellow]  ⚙ {chunk[len('[TOOL_CALL] '):]}[/dim yellow]",
+                                    f"\n[dim yellow]  ⚙ {chunk.removeprefix('[TOOL_CALL] ')}[/dim yellow]",
                                     end="",
                                 )
                                 continue
