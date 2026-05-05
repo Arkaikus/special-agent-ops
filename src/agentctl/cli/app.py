@@ -6,15 +6,15 @@ import typer
 from rich.console import Console
 
 from agentctl import __version__
-from agentctl.cli.apply import run_apply
 from agentctl.cli.chat import run_chat
-from agentctl.cli.deploy import run_deploy
 from agentctl.cli.doctor import run_doctor
+from agentctl.cli.down import run_down
 from agentctl.cli.exec_ import run_exec
 from agentctl.cli.list_agents import run_list
 from agentctl.cli.logs import run_logs
 from agentctl.cli.project import project_app
-from agentctl.cli.undeploy import run_undeploy
+from agentctl.cli.stop import run_stop
+from agentctl.cli.up import run_up
 
 app = typer.Typer(
     name="agentctl",
@@ -33,53 +33,33 @@ def _main(
         raise typer.Exit(0)
 
 
-@app.command("apply")
-def apply(
-    manifest: Path = typer.Argument(
-        ...,
-        help="Path to agent manifest (.yaml or .md with frontmatter).",
-    ),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Print actions without writing files."),
-    force: bool = typer.Option(False, "--force", help="Overwrite existing generated files under .cache/."),
+@app.command("up")
+def up(
+    agent_name: str | None = typer.Argument(None, help="Agent name to deploy. Omit to deploy all agents."),
+    build: bool = typer.Option(False, "--build", help="Regenerate codegen artifacts before building."),
 ) -> None:
-    """Validate manifest and write codegen output to .cache/{name}/."""
-    if not manifest.exists():
-        console.print(f"[red]Manifest not found: {manifest}[/red]")
-        raise typer.Exit(1)
-    if not manifest.is_file():
-        console.print(f"[red]Manifest path is not a file: {manifest}[/red]")
-        raise typer.Exit(1)
-    run_apply(manifest, dry_run=dry_run, force=force)
+    """Codegen, build and deploy agents from .agents/.
+
+    Processes all agents found in .agents/*.md unless a specific agent name is given.
+    Pass --build to force regeneration of codegen artifacts.
+    """
+    run_up(agent_name, build=build)
 
 
-@app.command("deploy")
-def deploy(
-    agent_name: str = typer.Argument(..., help="Agent name (directory under .cache/)."),
-    apply_first: bool = typer.Option(
-        False,
-        "--apply",
-        help="Run apply first using .agents/{name}.md or examples/agents/{name}.yaml if present.",
-    ),
-    manifest: Path | None = typer.Option(
-        None,
-        "--manifest",
-        "-f",
-        help="Manifest path when using --apply.",
-    ),
-    no_compose: bool = typer.Option(False, "--no-compose", help="Only build the image; do not run compose up."),
+@app.command("stop")
+def stop(
+    agent_name: str | None = typer.Argument(None, help="Agent name to stop. Omit to stop all deployed agents."),
 ) -> None:
-    """Build Docker image for an agent and run it via docker compose."""
-    run_deploy(agent_name, apply_first=apply_first, manifest=manifest, no_compose=no_compose)
+    """Stop running agent containers without removing them."""
+    run_stop(agent_name)
 
 
-@app.command("undeploy")
-def undeploy(
-    agent_name: str = typer.Argument(..., help="Agent name (directory under .cache/)."),
-    volumes: bool = typer.Option(False, "--volumes", "-v", help="Also remove named volumes."),
-    images: bool = typer.Option(False, "--images", "-i", help="Also remove locally built images."),
+@app.command("down")
+def down(
+    agent_name: str | None = typer.Argument(None, help="Agent name to bring down. Omit to bring down all deployed agents."),
 ) -> None:
-    """Bring down a deployed agent service (docker compose down)."""
-    run_undeploy(agent_name, remove_volumes=volumes, remove_images=images)
+    """Stop and remove agent containers (leaves .cache/ intact)."""
+    run_down(agent_name)
 
 
 @app.command("list")
