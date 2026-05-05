@@ -10,7 +10,7 @@ from agentctl.manifest.v1 import AgentManifest
 class CodegenContext:
     manifest: AgentManifest
     repo_root: Path
-    output_root: Path  # .agents/{name}/
+    output_root: Path  # .cache/{name}/
 
     @property
     def agent_name(self) -> str:
@@ -19,5 +19,5 @@ class CodegenContext:
     @classmethod
     def from_manifest(cls, manifest: AgentManifest, repo_root: Path) -> CodegenContext:
         name = manifest.metadata.name
-        output_root = repo_root / ".agents" / name
+        output_root = repo_root / ".cache" / name
         return cls(manifest=manifest, repo_root=repo_root, output_root=output_root)

@@ -11,7 +11,7 @@ console = Console()
 def run_undeploy(agent_name: str, *, remove_volumes: bool, remove_images: bool) -> None:
     """Bring down a deployed agent service using docker compose."""
     repo = Path.cwd()
-    agent_dir = repo / ".agents" / agent_name
+    agent_dir = repo / ".cache" / agent_name
 
     if not agent_dir.is_dir():
         raise SystemExit(

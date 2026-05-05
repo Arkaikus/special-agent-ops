@@ -9,6 +9,7 @@ description = "kubectl-like CLI for agent manifests, codegen, deploy, and gatewa
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "chromadb-client>=0.6",
     "typer>=0.12",
     "pydantic>=2.10",
     "pyyaml>=6.0",

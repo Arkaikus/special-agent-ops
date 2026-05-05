@@ -89,6 +89,18 @@ services:
     depends_on:
       - gateway
 
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chromadb-data:/chroma/chroma
+    networks:
+      - agentctl-net
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+
   # Ollama — local LLM inference server.
   # Enable with: docker compose --profile ollama up
   # GPU (NVIDIA): uncomment the 'deploy' block below and ensure the nvidia-container-toolkit is installed.
@@ -124,6 +136,7 @@ volumes:
   gitea-data: {}
   gateway-data: {}
   agentctl-shared-ws: {}
+  chromadb-data: {}
   ollama-data:
     driver: local
     driver_opts:

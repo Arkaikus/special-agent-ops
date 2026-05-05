@@ -11,9 +11,9 @@ console = Console()
 
 
 def run_list(agents_dir: Path | None) -> None:
-    """List agents scaffolded under .agents/ and show their basic config."""
+    """List agents scaffolded under .cache/ and show their basic config."""
     repo = Path.cwd()
-    root = agents_dir or (repo / ".agents")
+    root = agents_dir or (repo / ".cache")
 
     if not root.is_dir():
         console.print(f"[yellow]No agents directory found at {root}[/yellow]")

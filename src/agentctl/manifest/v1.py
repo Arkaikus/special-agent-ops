@@ -13,6 +13,7 @@ class Metadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, pattern=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
+    description: str | None = None
 
 
 class ModelAnthropic(BaseModel):

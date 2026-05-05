@@ -64,3 +64,83 @@ spec:
     p.write_text(bad, encoding="utf-8")
     with pytest.raises(ValueError):
         load_manifest_from_path(p)
+
+
+# ---------------------------------------------------------------------------
+# Markdown frontmatter manifest tests
+# ---------------------------------------------------------------------------
+
+
+def test_load_md_manifest_basic(tmp_path: Path) -> None:
+    """A .md file with frontmatter and body is parsed correctly."""
+    md = tmp_path / "myagent.md"
+    md.write_text(
+        """---
+name: myagent
+description: "Test agent"
+runtime: pydantic-ai
+model:
+  type: ollama
+  model_id: llama3.2
+  base_url: http://ollama:11434/v1
+deploy:
+  port: 8099
+---
+You are a helpful test agent.
+""",
+        encoding="utf-8",
+    )
+    m = load_manifest_from_path(md)
+    assert m.api_version == API_VERSION_V1
+    assert m.metadata.name == "myagent"
+    assert m.metadata.description == "Test agent"
+    assert m.spec.runtime == "pydantic-ai"
+    assert m.spec.model.type == "ollama"
+    assert m.spec.model.model_id == "llama3.2"  # type: ignore[union-attr]
+    assert m.spec.prompts.get("system") == "You are a helpful test agent."
+    assert m.spec.deploy.port == 8099
+
+
+def test_load_md_manifest_with_volumes_and_tools(tmp_path: Path) -> None:
+    """Volumes and tools frontmatter fields are mapped to spec correctly."""
+    md = tmp_path / "devagent.md"
+    md.write_text(
+        """---
+name: devagent
+model:
+  type: ollama
+  model_id: llama3.2
+volumes:
+  - target: /workspace
+    hostPath: .workspace
+tools: [ls, grep, edit]
+---
+You are a developer.
+""",
+        encoding="utf-8",
+    )
+    m = load_manifest_from_path(md)
+    assert len(m.spec.workspaces.volumes) == 1
+    assert m.spec.workspaces.volumes[0].target == "/workspace"
+    assert m.spec.workspaces.volumes[0].host_path == ".workspace"
+    assert m.spec.fs_tools is not None
+    assert m.spec.fs_tools.enabled is True
+    assert set(m.spec.fs_tools.allow) == {"ls", "grep", "edit"}
+
+
+def test_load_md_manifest_no_frontmatter_raises(tmp_path: Path) -> None:
+    """A .md file without frontmatter should raise ValueError."""
+    md = tmp_path / "bad.md"
+    md.write_text("Just plain text, no frontmatter.", encoding="utf-8")
+    with pytest.raises(ValueError, match="frontmatter"):
+        load_manifest_from_path(md)
+
+
+def test_load_md_manifest_agents_folder() -> None:
+    """Load each agent definition from the .agents/ folder."""
+    agents_dir = Path(__file__).resolve().parent.parent / ".agents"
+    for agent_file in sorted(agents_dir.glob("*.md")):
+        m = load_manifest_from_path(agent_file)
+        assert m.metadata.name, f"{agent_file} must have a name"
+        assert m.spec.model.type == "ollama", f"{agent_file} must use ollama model"
+        assert "system" in m.spec.prompts, f"{agent_file} must have a system prompt"

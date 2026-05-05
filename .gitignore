@@ -207,8 +207,8 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Generated agents
-.agents/
+# Generated agent deployment artifacts
+.cache/
 
 # Frontend
 frontend/node_modules/

@@ -14,7 +14,7 @@ console = Console()
 def run_exec(agent_name: str, *, shell: str) -> None:
     """Attach an interactive shell inside a running agent container."""
     repo = find_repo_root()
-    agent_dir = (repo / ".agents" / agent_name).resolve()
+    agent_dir = (repo / ".cache" / agent_name).resolve()
 
     if not agent_dir.is_dir():
         raise SystemExit(

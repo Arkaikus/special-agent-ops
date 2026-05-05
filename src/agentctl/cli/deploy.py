@@ -18,10 +18,16 @@ def run_deploy(
     no_compose: bool,
 ) -> None:
     repo = Path.cwd()
-    agent_dir = repo / ".agents" / agent_name
+    agent_dir = repo / ".cache" / agent_name
 
     if apply_first:
-        mpath = manifest or (repo / "examples" / "agents" / f"{agent_name}.yaml")
+        if manifest is None:
+            # Prefer new .agents/<name>.md, fall back to legacy examples/agents/<name>.yaml
+            md_path = repo / ".agents" / f"{agent_name}.md"
+            yaml_path = repo / "examples" / "agents" / f"{agent_name}.yaml"
+            mpath: Path = md_path if md_path.is_file() else yaml_path
+        else:
+            mpath = manifest
         if not mpath.is_file():
             raise SystemExit(f"--apply requires manifest at {mpath} or pass --manifest")
         run_apply(mpath, dry_run=False, force=True)
