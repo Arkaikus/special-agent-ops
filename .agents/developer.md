@@ -4,7 +4,7 @@ description: "Full-stack developer responsible for implementing features, writin
 runtime: pydantic-ai
 model:
   type: ollama
-  model_id: llama3.2
+  model_id: gemma4:e2b
   base_url: http://ollama:11434/v1
 volumes:
   - target: /workspace
